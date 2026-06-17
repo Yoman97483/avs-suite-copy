@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AVS - Administration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>AVS - Administration</h1>
+      <div id="admin-email" class="admin-email"></div>
+      <button id="logout-btn" class="btn btn-secondary hidden">Se déconnecter</button>
+    </header>
+
+    <main class="container">
+      <section id="login-section">
+        <h2>Connexion administrateur</h2>
+        <p class="hint">
+          Cette interface est réservée à l'administrateur AVS.
+        </p>
+        <form id="login-form" class="card">
+          <label>
+            Email
+            <!--
+              IMPORTANT:
+              - On empêche le pré-remplissage automatique (email + mot de passe) à l'arrivée.
+              - On laisse Chrome proposer le mot de passe UNIQUEMENT après saisie de l'email.
+              Pour ça :
+              - Champ visible = pas de "name=email" + autocomplete off (donc pas de suggestion immédiate)
+              - Champ caché = username (rempli uniquement quand l'email est validé)
+            -->
+            <input
+              type="text"
+              id="email-input"
+              name="email_display"
+              autocomplete="off"
+              inputmode="email"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
+            <input
+              type="email"
+              id="username-hidden"
+              name="email"
+              autocomplete="username"
+              tabindex="-1"
+              aria-hidden="true"
+              class="hidden"
+            />
+          </label>
+          <label>
+            Mot de passe
+            <input
+              type="password"
+              id="password-input"
+              name="password"
+              autocomplete="current-password"
+              disabled
+              required
+            />
+          </label>
+          <button type="submit" class="btn btn-primary">Se connecter</button>
+          <p id="login-error" class="message error hidden"></p>
+        </form>
+      </section>
+
+      <section id="admin-section" class="hidden">
+        <nav class="tabs">
+          <button class="tab-btn" data-tab="employees-tab">Employés</button>
+          <button class="tab-btn" data-tab="clients-tab">Clients</button>
+          <button class="tab-btn" data-tab="interventions-tab">Interventions</button>
+          <button class="tab-btn" data-tab="pointages-tab">Pointages</button>
+          <button class="tab-btn" data-tab="missing-distances-tab">Distance manquante</button>
+          <button class="tab-btn" data-tab="employee-month-summary-tab">Bilan mensuel</button>
+          <button class="tab-btn" data-tab="client-monthly-bilan-tab">Bilan mensuel client</button>
+        </nav>
+
+        <section class="card" id="welcome-card">
+          <h2>Bienvenue dans l'administration AVS</h2>
+          <p class="hint">
+            Sélectionnez un onglet ci-dessus pour gérer les employés, les clients, les interventions
+            ou consulter les pointages.
+          </p>
+        </section>
+
+        <!-- EMPLOYÉS -->
+        <section id="employees-tab" class="tab">
+          <h2>Employés</h2>
+
+          <div class="card">
+            <h3>Ajouter / modifier un employé</h3>
+            <form id="employee-form" class="form-grid" autocomplete="off">
+              <input type="hidden" id="employee-id" />
+
+              <label>
+                Prénom
+                <input type="text" id="employee-first-name" required />
+              </label>
+              <label>
+                Nom
+                <input type="text" id="employee-last-name" required />
+              </label>
+              <label>
+                Adresse
+                <input type="text" id="employee-address" />
+              </label>
+              <label>
+                Téléphone
+                <input type="tel" id="employee-phone" />
+              </label>
+              <label>
+                Email (identifiant de connexion)
+                <input type="email" id="employee-email" autocomplete="off" />
+              </label>
+              <label>
+                Mot de passe initial (création uniquement)
+                <input type="password" id="employee-password" autocomplete="new-password" />
+              </label>
+
+              <div class="form-actions">
+                <button type="button" id="employee-reset-btn" class="btn btn-secondary">
+                  Nouvel employé
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+            <p id="employee-form-message" class="message"></p>
+            <p class="hint">
+              Lors de la <strong>création</strong> d'un employé, son compte utilisateur Supabase est créé
+              avec l'email et le mot de passe indiqués.<br />
+              Lors de la <strong>modification</strong> d'un employé existant, le mot de passe n'est pas
+              modifié depuis cette interface. Pour changer un mot de passe, utiliser le dashboard
+              Supabase (Auth → Users).
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Liste des employés</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Prénom</th>
+                  <th>Nom</th>
+                  <th>Adresse</th>
+                  <th>Téléphone</th>
+                  <th>Email</th>
+                  <th>Créé le</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="employees-table-body">
+                <tr>
+                  <td colspan="5">Aucun employé chargé. Choisissez l'onglet Employés.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- CLIENTS -->
+        <section id="clients-tab" class="tab">
+          <h2>Clients</h2>
+
+          <div class="card">
+            <h3>Ajouter / modifier un client</h3>
+            <form id="client-form" class="form-grid">
+              <input type="hidden" id="client-id" />
+
+              <label>
+                Nom du client
+                <input type="text" id="client-name" required />
+              </label>
+              <label>
+                Adresse (adresse + code postal + ville)
+                <input type="text" id="client-address" />
+              </label>
+              <label>
+                Téléphone
+                <input type="tel" id="client-phone" />
+              </label>
+              <label>
+                Notes
+                <input type="text" id="client-notes" />
+              </label>
+
+              <div class="form-actions">
+                <button type="button" id="client-reset-btn" class="btn btn-secondary">
+                  Nouveau client
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+            <p id="client-form-message" class="message"></p>
+          </div>
+
+          <div class="card">
+            <h3>Liste des clients</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Adresse</th>
+                  <th>Téléphone</th>
+                  <th>Notes</th>
+                  <th>Créé le</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="clients-table-body">
+                <tr>
+                  <td colspan="5">Aucun client chargé. Choisissez l'onglet Clients.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- INTERVENTIONS -->
+        <section id="interventions-tab" class="tab">
+          <h2>Interventions</h2>
+
+          <div class="card">
+            <h3>Ajouter / modifier une intervention</h3>
+            <form id="intervention-form" class="form-grid">
+              <input type="hidden" id="intervention-id" />
+
+              <label>
+                Client
+                <select id="intervention-client-id"></select>
+              </label>
+              <label>
+                Employé
+                <select id="intervention-employee-id"></select>
+              </label>
+              <label>
+                Date
+                <input type="date" id="intervention-date" />
+              </label>
+              <label>
+                Heure de début
+                <input type="time" id="intervention-start-time" />
+              </label>
+              <label>
+                Heure de fin
+                <input type="time" id="intervention-end-time" />
+              </label>
+
+              <div class="form-actions">
+                <button type="button" id="intervention-reset-btn" class="btn btn-secondary">
+                  Nouvelle intervention
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+            <p id="intervention-form-message" class="message"></p>
+            <p class="hint">
+              Les interventions utilisent les clients et employés déjà créés. Assurez-vous d'abord
+              d'avoir créé le client et l'employé correspondants.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Liste des interventions</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Employé</th>
+                  <th>Date</th>
+                  <th>Heure début (prévue)</th>
+                  <th>Heure fin (prévue)</th>
+                  <th>Fait</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="interventions-table-body">
+                <tr>
+                  <td colspan="7">Aucune intervention chargée. Choisissez l'onglet Interventions.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- POINTAGES -->
+        <section id="pointages-tab" class="tab">
+          <h2>Pointages</h2>
+          <div class="card">
+            <h3>Liste des pointages</h3>
+            <p class="hint">
+              Les pointages sont générés automatiquement par l'application employé lors des clics
+              sur <strong>Début</strong> et <strong>Fin</strong>. Ici l'administrateur peut uniquement
+              les consulter ou les supprimer.
+            </p>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date interv.</th>
+                  <th>Employé</th>
+                  <th>Client</th>
+                  <th>Type</th>
+                  <th>Heure pointage</th>
+                  <th>Latitude</th>
+                  <th>Longitude</th>
+                  <th>Précision (m)</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="pointages-table-body">
+                <tr>
+                  <td colspan="9">Aucun pointage chargé. Choisissez l'onglet Pointages.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- DISTANCES MANQUANTES -->
+        <section id="missing-distances-tab" class="tab">
+          <h2>Distances manquantes</h2>
+          <p class="hint">
+            Liste des trajets entre clients pour lesquels aucune distance n’est encore enregistrée.
+            Saisissez la distance en kilomètres pour chaque ligne puis cliquez sur « Enregistrer ».
+          </p>
+
+          <div id="missing-distances-message" class="form-message"></div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Client A</th>
+                  <th>Client B</th>
+                  <th>Distance (km)</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="missing-distances-table-body">
+                <tr>
+                  <td colspan="4">Aucun trajet manquant.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </section>
+
+        <!-- BILAN MENSUEL -->
+        <section id="employee-month-summary-tab" class="tab">
+          <h2>Bilan mensuel</h2>
+          <p class="hint">
+            Résumé des heures travaillées et des kilomètres parcourus par employé et par mois.
+          </p>
+
+          <p id="employee-month-summary-message" class="message"></p>
+
+          <div class="card">
+            <h3>Récapitulatif mensuel par employé</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mois</th>
+                  <th>Prénom</th>
+                  <th>Nom</th>
+                  <th>Heures travaillées</th>
+                  <th>Km parcourus</th>
+                  <th>Trajets sans distance</th>
+                </tr>
+              </thead>
+              <tbody id="employee-month-summary-table-body">
+                <tr>
+                  <td colspan="6">Aucun bilan chargé. Choisissez l&apos;onglet Bilan mensuel.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- BILAN MENSUEL CLIENT -->
+        <section id="client-monthly-bilan-tab" class="tab">
+          <h2>Bilan mensuel client</h2>
+          <p class="hint">
+            Résumé des heures effectuées chaque mois chez chaque client.
+          </p>
+
+          <p id="client-monthly-bilan-message" class="message"></p>
+
+          <div class="card">
+            <h3>Récapitulatif mensuel par client</h3>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mois</th>
+                  <th>Année</th>
+                  <th>Client</th>
+                  <th>Heures effectuées</th>
+                </tr>
+              </thead>
+              <tbody id="client-monthly-bilan-table-body">
+                <tr>
+                  <td colspan="4">Aucun bilan chargé. Choisissez l&apos;onglet Bilan mensuel client.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="./admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+node_modules/
+mobile/node_modules/
+.netlify/
+
+# Local handoff files containing temporary credentials.
+outputs/*.csv
+
+# Supabase local state can contain linked-project metadata.
+supabase/.branches/
+supabase/.temp/

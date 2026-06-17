@@ -1,0 +1,226 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+  background: url('./bg_light.jpg') no-repeat center center fixed;
+  background-size: cover;
+  color: #1f2933;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(11, 114, 133, 0.95);
+  color: white;
+}
+
+.topbar h1 {
+  font-size: 20px;
+}
+
+.admin-email {
+  margin-right: 12px;
+  font-size: 14px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  margin-top: 16px;
+}
+
+h2 {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+h3 {
+  margin-bottom: 8px;
+}
+
+label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+input:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.btn {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background: #0b7285;
+  color: white;
+}
+
+.btn-secondary {
+  background: white;
+  color: #0b7285;
+  border: 1px solid #0b7285;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.message {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.message.error {
+  color: #e03131;
+}
+
+.hint {
+  font-size: 13px;
+  margin-top: 8px;
+  color: #52616b;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab-btn.active {
+  background: #0b7285;
+  color: white;
+  border-color: #0b7285;
+}
+
+.tab {
+  display: none;
+}
+
+.tab.active {
+  display: block;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.data-table tbody tr:hover {
+  background: #f1f5f9;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.badge-success {
+  background: #d3f9d8;
+  color: #2f9e44;
+}
+
+.badge-muted {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* --- Ajout pour que le fond couvre bien toute la hauteur --- */
+html,
+body {
+  min-height: 100vh;
+}
+
+/* --- Correction spécifique mobile pour le fond --- */
+@media (max-width: 768px) {
+  body {
+    background: url('./bg_light.jpg') no-repeat center center;
+    background-size: cover;
+    background-attachment: scroll; /* évite les bugs de fixed sur mobile */
+  }
+}
