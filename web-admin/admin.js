@@ -915,17 +915,9 @@ async function loadInterventions() {
     const clientName = intv.client_name ?? '';
     const employeeName = intv.employee_name ?? '';
 
-    const faitRaw =
-      intv.fait === true
-        ? 'validé'
-        : intv.fait === false || intv.fait == null
-          ? 'en attente'
-          : intv.fait;
-    const isDone = intv.status === 'done';
+    const faitRaw = intv.fait ?? 'en attente';
     const isManuallyValidated = validatedInterventions.has(intv.id);
-    // Priorité au statut persisté en base : si status = done, on affiche toujours "validé"
-    // (même si la vue calcule encore "Pb position"/"Pb temps").
-    const fait = isDone ? 'validé' : (isManuallyValidated ? 'validé' : faitRaw);
+    const fait = isManuallyValidated ? 'validé' : faitRaw;
 
     const canEdit = !isManuallyValidated && fait === 'en attente';
     const disabledAttr = canEdit ? '' : 'disabled';
