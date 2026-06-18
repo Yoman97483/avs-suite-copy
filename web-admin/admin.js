@@ -157,6 +157,23 @@ const interventionIsWeeklyInput = null; // plus d’hebdomadaire
 const interventionResetBtn = document.getElementById('intervention-reset-btn');
 const interventionFormMessage = document.getElementById('intervention-form-message');
 
+// Emploi du temps – éléments du DOM
+const scheduleEmployeeSelect = document.getElementById('schedule-employee-id');
+const scheduleWeekStartInput = document.getElementById('schedule-week-start');
+const scheduleCurrentWeekBtn = document.getElementById('schedule-current-week-btn');
+const scheduleLoadBtn = document.getElementById('schedule-load-btn');
+const scheduleMessage = document.getElementById('schedule-message');
+const scheduleForm = document.getElementById('schedule-form');
+const scheduleInterventionIdInput = document.getElementById('schedule-intervention-id');
+const scheduleClientSelect = document.getElementById('schedule-client-id');
+const scheduleDateInput = document.getElementById('schedule-date');
+const scheduleStartTimeInput = document.getElementById('schedule-start-time');
+const scheduleEndTimeInput = document.getElementById('schedule-end-time');
+const scheduleNewBtn = document.getElementById('schedule-new-btn');
+const scheduleFormMessage = document.getElementById('schedule-form-message');
+const scheduleWeekTitle = document.getElementById('schedule-week-title');
+const scheduleTableBody = document.getElementById('schedule-table-body');
+
 // Pointages – éléments du DOM
 const pointagesTableBody = document.getElementById('pointages-table-body');
 
@@ -310,6 +327,11 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
       loadInterventionsLookups();
       loadInterventions();
       startAutoRefreshInterventions();
+    } else if (tabId === 'schedule-tab') {
+      loadScheduleLookups().then(() => {
+        setScheduleCurrentWeekIfEmpty();
+        loadEmployeeSchedule();
+      });
     } else if (tabId === 'pointages-tab') {
       loadPointages();
       startAutoRefreshPointages();
@@ -1151,6 +1173,457 @@ if (interventionsTableBody) {
       localStorage.setItem(WEEK_COLLAPSE_KEY, JSON.stringify(collapsedWeeks));
     } catch (e) {
       console.error('Erreur sauvegarde collapsedWeeks', e);
+    }
+  });
+}
+
+// --------- Gestion Emploi du temps ---------
+
+function setScheduleMessage(text, type = 'info') {
+  if (!scheduleMessage) return;
+  scheduleMessage.textContent = text || '';
+  scheduleMessage.classList.remove('error');
+  if (text && type === 'error') {
+    scheduleMessage.classList.add('error');
+  }
+}
+
+function setScheduleFormMessage(text, type = 'info') {
+  if (!scheduleFormMessage) return;
+  scheduleFormMessage.textContent = text || '';
+  scheduleFormMessage.classList.remove('error');
+  if (text && type === 'error') {
+    scheduleFormMessage.classList.add('error');
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function dateToInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseInputDate(value) {
+  if (!value) return null;
+  const date = new Date(value + 'T00:00:00');
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getMonday(date) {
+  const monday = new Date(date);
+  const day = monday.getDay();
+  const offsetToMonday = (day + 6) % 7;
+  monday.setDate(monday.getDate() - offsetToMonday);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function setScheduleCurrentWeekIfEmpty(force = false) {
+  if (!scheduleWeekStartInput) return;
+  if (!force && scheduleWeekStartInput.value) return;
+  scheduleWeekStartInput.value = dateToInputValue(getMonday(new Date()));
+}
+
+function normalizeScheduleWeekStart() {
+  if (!scheduleWeekStartInput) return null;
+  const selected = parseInputDate(scheduleWeekStartInput.value);
+  if (!selected) return null;
+  const monday = getMonday(selected);
+  scheduleWeekStartInput.value = dateToInputValue(monday);
+  return monday;
+}
+
+function resetScheduleForm() {
+  if (scheduleInterventionIdInput) scheduleInterventionIdInput.value = '';
+  if (scheduleClientSelect) scheduleClientSelect.value = '';
+  if (scheduleDateInput) scheduleDateInput.value = scheduleWeekStartInput?.value || '';
+  if (scheduleStartTimeInput) scheduleStartTimeInput.value = '';
+  if (scheduleEndTimeInput) scheduleEndTimeInput.value = '';
+  setScheduleFormMessage('');
+}
+
+async function loadScheduleLookups() {
+  if (!scheduleEmployeeSelect || !scheduleClientSelect) return;
+
+  const previousEmployee = scheduleEmployeeSelect.value;
+  const previousClient = scheduleClientSelect.value;
+
+  const { data: employees, error: employeesError } = await supabase
+    .from('employees')
+    .select('id, first_name, last_name')
+    .order('last_name', { ascending: true })
+    .order('first_name', { ascending: true });
+
+  if (employeesError) {
+    setScheduleMessage(
+      employeesError.message ?? 'Impossible de charger les employés.',
+      'error'
+    );
+    return;
+  }
+
+  scheduleEmployeeSelect.innerHTML =
+    '<option value="">-- Choisir un employé --</option>';
+  (employees || []).forEach((employee) => {
+    const opt = document.createElement('option');
+    opt.value = employee.id;
+    opt.textContent = `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim();
+    scheduleEmployeeSelect.appendChild(opt);
+  });
+
+  if (previousEmployee) {
+    scheduleEmployeeSelect.value = previousEmployee;
+  }
+  if (!scheduleEmployeeSelect.value && scheduleEmployeeSelect.options.length > 1) {
+    scheduleEmployeeSelect.selectedIndex = 1;
+  }
+
+  const { data: clients, error: clientsError } = await supabase
+    .from('clients')
+    .select('id, name')
+    .order('name', { ascending: true });
+
+  if (clientsError) {
+    setScheduleMessage(
+      clientsError.message ?? 'Impossible de charger les clients.',
+      'error'
+    );
+    return;
+  }
+
+  scheduleClientSelect.innerHTML =
+    '<option value="">-- Choisir un client --</option>';
+  (clients || []).forEach((clientRow) => {
+    const opt = document.createElement('option');
+    opt.value = clientRow.id;
+    opt.textContent = clientRow.name || '';
+    scheduleClientSelect.appendChild(opt);
+  });
+
+  if (previousClient) {
+    scheduleClientSelect.value = previousClient;
+  }
+}
+
+function renderScheduleRows(interventions, monday) {
+  if (!scheduleTableBody) return;
+
+  scheduleTableBody.innerHTML = '';
+
+  const rowsByDate = new Map();
+  (interventions || []).forEach((row) => {
+    const key = row.date || '';
+    if (!rowsByDate.has(key)) rowsByDate.set(key, []);
+    rowsByDate.get(key).push(row);
+  });
+
+  let totalRows = 0;
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  for (let index = 0; index < 7; index += 1) {
+    const day = addDays(monday, index);
+    const dateValue = dateToInputValue(day);
+    const dayRows = rowsByDate.get(dateValue) || [];
+    const dayLabel = formatter.format(day);
+    const [weekdayLabel] = dayLabel.split(' ');
+    const dateLabel = day.toLocaleDateString('fr-FR');
+
+    if (dayRows.length === 0) {
+      const emptyTr = document.createElement('tr');
+      emptyTr.classList.add('schedule-empty-row');
+      emptyTr.innerHTML = `
+        <td>${escapeHtml(weekdayLabel)}</td>
+        <td>${escapeHtml(dateLabel)}</td>
+        <td colspan="4">Aucune intervention prévue.</td>
+      `;
+      scheduleTableBody.appendChild(emptyTr);
+      continue;
+    }
+
+    dayRows.forEach((intv, rowIndex) => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = intv.id;
+      tr.dataset.fait = intv.fait || 'en attente';
+
+      const statusLabel = intv.fait || 'en attente';
+      const canEdit = statusLabel === 'en attente';
+      const disabledAttr = canEdit ? '' : 'disabled';
+      const disabledClass = canEdit ? '' : ' disabled';
+      const timeLabel = `${intv.start_time_planned || ''} - ${intv.end_time_planned || ''}`;
+
+      tr.innerHTML = `
+        <td>${rowIndex === 0 ? escapeHtml(weekdayLabel) : ''}</td>
+        <td>${rowIndex === 0 ? escapeHtml(dateLabel) : ''}</td>
+        <td>${escapeHtml(timeLabel)}</td>
+        <td>${escapeHtml(intv.client_name || '')}</td>
+        <td><span class="schedule-status">${escapeHtml(statusLabel)}</span></td>
+        <td>
+          <div class="action-buttons">
+            <button class="btn btn-secondary btn-small${disabledClass}"
+                    data-action="schedule-edit"
+                    ${disabledAttr}>Modifier</button>
+            <button class="btn btn-secondary btn-small${disabledClass}"
+                    data-action="schedule-delete"
+                    ${disabledAttr}>Supprimer</button>
+          </div>
+        </td>
+      `;
+      scheduleTableBody.appendChild(tr);
+      totalRows += 1;
+    });
+  }
+
+  if (totalRows === 0) {
+    setScheduleMessage('Aucune intervention prévue pour cette semaine.');
+  }
+}
+
+async function loadEmployeeSchedule() {
+  if (!scheduleTableBody || !scheduleEmployeeSelect || !scheduleWeekStartInput) return;
+
+  setScheduleMessage('');
+  const employeeId = scheduleEmployeeSelect.value;
+  const monday = normalizeScheduleWeekStart();
+
+  if (!employeeId) {
+    scheduleTableBody.innerHTML =
+      '<tr><td colspan="6">Choisissez un employé.</td></tr>';
+    return;
+  }
+  if (!monday) {
+    scheduleTableBody.innerHTML =
+      '<tr><td colspan="6">Choisissez une semaine valide.</td></tr>';
+    return;
+  }
+
+  const sunday = addDays(monday, 6);
+  const nextMonday = addDays(monday, 7);
+  const fromDate = dateToInputValue(monday);
+  const toDate = dateToInputValue(nextMonday);
+
+  if (scheduleWeekTitle) {
+    scheduleWeekTitle.textContent =
+      'Planning du ' +
+      monday.toLocaleDateString('fr-FR') +
+      ' au ' +
+      sunday.toLocaleDateString('fr-FR');
+  }
+
+  scheduleTableBody.innerHTML =
+    '<tr><td colspan="6">Chargement…</td></tr>';
+
+  const { data, error } = await supabase
+    .from('interventions_progress_admin')
+    .select(`
+      id,
+      client_id,
+      employee_id,
+      date,
+      start_time_planned,
+      end_time_planned,
+      client_name,
+      employee_name,
+      fait
+    `)
+    .eq('employee_id', employeeId)
+    .gte('date', fromDate)
+    .lt('date', toDate)
+    .order('date', { ascending: true })
+    .order('start_time_planned', { ascending: true });
+
+  if (error) {
+    scheduleTableBody.innerHTML =
+      '<tr><td colspan="6">Erreur lors du chargement du planning.</td></tr>';
+    setScheduleMessage(error.message ?? 'Chargement impossible.', 'error');
+    return;
+  }
+
+  renderScheduleRows(data || [], monday);
+}
+
+if (scheduleCurrentWeekBtn) {
+  scheduleCurrentWeekBtn.addEventListener('click', () => {
+    setScheduleCurrentWeekIfEmpty(true);
+    resetScheduleForm();
+    loadEmployeeSchedule();
+  });
+}
+
+if (scheduleLoadBtn) {
+  scheduleLoadBtn.addEventListener('click', () => {
+    resetScheduleForm();
+    loadEmployeeSchedule();
+  });
+}
+
+if (scheduleEmployeeSelect) {
+  scheduleEmployeeSelect.addEventListener('change', () => {
+    resetScheduleForm();
+    loadEmployeeSchedule();
+  });
+}
+
+if (scheduleWeekStartInput) {
+  scheduleWeekStartInput.addEventListener('change', () => {
+    normalizeScheduleWeekStart();
+    resetScheduleForm();
+    loadEmployeeSchedule();
+  });
+}
+
+if (scheduleNewBtn) {
+  scheduleNewBtn.addEventListener('click', () => {
+    resetScheduleForm();
+    setScheduleFormMessage('Nouvelle intervention pour cette semaine.');
+  });
+}
+
+if (scheduleForm) {
+  scheduleForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setScheduleFormMessage('');
+
+    const id = scheduleInterventionIdInput?.value || null;
+    const employee_id = scheduleEmployeeSelect?.value || null;
+    const client_id = scheduleClientSelect?.value || null;
+    const date = scheduleDateInput?.value || null;
+    const start_time_planned = scheduleStartTimeInput?.value || null;
+    const end_time_planned = scheduleEndTimeInput?.value || null;
+
+    if (!employee_id || !client_id || !date || !start_time_planned || !end_time_planned) {
+      setScheduleFormMessage(
+        'Employé, client, date, heure de début et heure de fin sont obligatoires.',
+        'error'
+      );
+      return;
+    }
+
+    if (end_time_planned <= start_time_planned) {
+      setScheduleFormMessage(
+        "L'heure de fin doit être après l'heure de début.",
+        'error'
+      );
+      return;
+    }
+
+    try {
+      if (id) {
+        const { error } = await supabase
+          .from('interventions')
+          .update({ employee_id, client_id, date, start_time_planned, end_time_planned })
+          .eq('id', id);
+        if (error) throw error;
+        setScheduleFormMessage('Intervention mise à jour dans le planning.');
+      } else {
+        const { error } = await supabase.from('interventions').insert([
+          { employee_id, client_id, date, start_time_planned, end_time_planned, status: 'planned' },
+        ]);
+        if (error) throw error;
+        setScheduleFormMessage('Intervention ajoutée au planning.');
+      }
+
+      await loadEmployeeSchedule();
+      await loadInterventions();
+      resetScheduleForm();
+    } catch (err) {
+      setScheduleFormMessage(
+        err?.message ?? "Erreur lors de l'enregistrement du planning.",
+        'error'
+      );
+    }
+  });
+}
+
+if (scheduleTableBody) {
+  scheduleTableBody.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const action = target.dataset.action;
+    if (!action) return;
+
+    const row = target.closest('tr');
+    if (!row) return;
+    const id = row.dataset.id;
+    if (!id) return;
+
+    const fait = row.dataset.fait || 'en attente';
+    if (fait !== 'en attente') {
+      setScheduleFormMessage(
+        "Cette intervention est déjà effectuée, validée ou en anomalie : elle n'est pas modifiable ici.",
+        'error'
+      );
+      return;
+    }
+
+    if (action === 'schedule-edit') {
+      await loadScheduleLookups();
+
+      const { data, error } = await supabase
+        .from('interventions')
+        .select('id, client_id, employee_id, date, start_time_planned, end_time_planned')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !data) {
+        setScheduleFormMessage(
+          "Impossible de charger l'intervention pour modification.",
+          'error'
+        );
+        return;
+      }
+
+      if (scheduleInterventionIdInput) scheduleInterventionIdInput.value = data.id;
+      if (scheduleEmployeeSelect) scheduleEmployeeSelect.value = data.employee_id || '';
+      if (scheduleClientSelect) scheduleClientSelect.value = data.client_id || '';
+      if (scheduleDateInput) scheduleDateInput.value = data.date || '';
+      if (scheduleStartTimeInput) scheduleStartTimeInput.value = data.start_time_planned || '';
+      if (scheduleEndTimeInput) scheduleEndTimeInput.value = data.end_time_planned || '';
+      setScheduleFormMessage("Modification d'une intervention du planning.");
+      scheduleForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (action === 'schedule-delete') {
+      const confirmed = window.confirm(
+        'Supprimer cette intervention du planning ?'
+      );
+      if (!confirmed) return;
+
+      const { error } = await supabase
+        .from('interventions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        setScheduleFormMessage(error.message ?? 'Suppression impossible.', 'error');
+        return;
+      }
+
+      if (scheduleInterventionIdInput?.value === id) {
+        resetScheduleForm();
+      }
+      setScheduleFormMessage('Intervention supprimée du planning.');
+      await loadEmployeeSchedule();
+      await loadInterventions();
     }
   });
 }

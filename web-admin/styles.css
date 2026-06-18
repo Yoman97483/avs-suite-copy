@@ -114,6 +114,7 @@ input:disabled {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .tab-btn {
@@ -210,6 +211,39 @@ input:disabled {
   font-size: 12px;
 }
 
+.schedule-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px) auto;
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.schedule-table td:first-child {
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.schedule-empty-row td {
+  color: #52616b;
+}
+
+.schedule-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e7f5ff;
+  color: #0b7285;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* --- Ajout pour que le fond couvre bien toute la hauteur --- */
 html,
 body {
@@ -222,5 +256,18 @@ body {
     background: url('./bg_light.jpg') no-repeat center center;
     background-size: cover;
     background-attachment: scroll; /* évite les bugs de fixed sur mobile */
+  }
+
+  .form-grid,
+  .schedule-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-actions {
+    justify-content: stretch;
+  }
+
+  .schedule-actions .btn {
+    flex: 1;
   }
 }

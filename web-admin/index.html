@@ -71,6 +71,7 @@
           <button class="tab-btn" data-tab="employees-tab">Employés</button>
           <button class="tab-btn" data-tab="clients-tab">Clients</button>
           <button class="tab-btn" data-tab="interventions-tab">Interventions</button>
+          <button class="tab-btn" data-tab="schedule-tab">Emploi du temps</button>
           <button class="tab-btn" data-tab="pointages-tab">Pointages</button>
           <button class="tab-btn" data-tab="missing-distances-tab">Distance manquante</button>
           <button class="tab-btn" data-tab="employee-month-summary-tab">Bilan mensuel</button>
@@ -284,6 +285,96 @@
               <tbody id="interventions-table-body">
                 <tr>
                   <td colspan="7">Aucune intervention chargée. Choisissez l'onglet Interventions.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- EMPLOI DU TEMPS -->
+        <section id="schedule-tab" class="tab">
+          <h2>Emploi du temps</h2>
+          <p class="hint">
+            Visualisez la semaine d'un employé et modifiez les interventions planifiées.
+          </p>
+
+          <div class="card">
+            <h3>Choisir une semaine</h3>
+            <div class="schedule-controls">
+              <label>
+                Employé
+                <select id="schedule-employee-id"></select>
+              </label>
+              <label>
+                Semaine du
+                <input type="date" id="schedule-week-start" />
+              </label>
+              <div class="schedule-actions">
+                <button type="button" id="schedule-current-week-btn" class="btn btn-secondary">
+                  Semaine actuelle
+                </button>
+                <button type="button" id="schedule-load-btn" class="btn btn-primary">
+                  Afficher
+                </button>
+              </div>
+            </div>
+            <p id="schedule-message" class="message"></p>
+          </div>
+
+          <div class="card">
+            <h3>Ajouter / modifier une intervention de la semaine</h3>
+            <form id="schedule-form" class="form-grid">
+              <input type="hidden" id="schedule-intervention-id" />
+
+              <label>
+                Client
+                <select id="schedule-client-id"></select>
+              </label>
+              <label>
+                Date
+                <input type="date" id="schedule-date" />
+              </label>
+              <label>
+                Heure de début
+                <input type="time" id="schedule-start-time" />
+              </label>
+              <label>
+                Heure de fin
+                <input type="time" id="schedule-end-time" />
+              </label>
+
+              <div class="form-actions">
+                <button type="button" id="schedule-new-btn" class="btn btn-secondary">
+                  Nouvelle intervention
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+            <p id="schedule-form-message" class="message"></p>
+            <p class="hint">
+              Les interventions déjà effectuées, validées ou avec problème sont protégées ici.
+              Modifiez uniquement le planning qui est encore en attente.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3 id="schedule-week-title">Planning hebdomadaire</h3>
+            <table class="data-table schedule-table">
+              <thead>
+                <tr>
+                  <th>Jour</th>
+                  <th>Date</th>
+                  <th>Heure</th>
+                  <th>Client</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="schedule-table-body">
+                <tr>
+                  <td colspan="6">Choisissez un employé et une semaine.</td>
                 </tr>
               </tbody>
             </table>
