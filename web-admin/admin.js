@@ -346,6 +346,8 @@ if (passwordResetForm) {
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   loginError.classList.add('hidden');
+  loginError.classList.add('error');
+  loginError.classList.remove('success');
   loginError.textContent = '';
 
   const email = emailInput.value.trim();
