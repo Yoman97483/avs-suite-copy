@@ -824,6 +824,8 @@ async function loadInterventionsLookups() {
 async function loadInterventions() {
   if (!interventionsTableBody) return;
 
+  await duplicateCurrentWeekToNextWeek(null, { showMessage: false });
+
   // On ne vide plus le tableau tant qu’on n’a pas de nouvelles données,
   // pour éviter tout clignotement.
   const hadRowsBefore = interventionsTableBody.querySelector('tr');
@@ -838,7 +840,10 @@ async function loadInterventions() {
       employee_name,
       start_time_planned,
       end_time_planned,
-      fait
+      fait,
+      client_id,
+      employee_id,
+      duplicated_from_intervention_id
     `)
     .order('date', { ascending: true })
     .order('start_time_planned', { ascending: true });
@@ -953,6 +958,7 @@ async function loadInterventions() {
     const faitRaw = intv.fait ?? 'en attente';
     const isManuallyValidated = validatedInterventions.has(intv.id);
     const fait = isManuallyValidated ? 'validé' : faitRaw;
+    const isDuplicated = Boolean(intv.duplicated_from_intervention_id);
 
     const canEdit = !isManuallyValidated && canEditPlannedIntervention(fait);
     const canFinalize = !isManuallyValidated && canAdminValidateOrDelete(fait);
@@ -969,6 +975,13 @@ async function loadInterventions() {
 
     tr.dataset.id = intv.id;
     tr.dataset.fait = fait;
+    tr.dataset.employeeId = intv.employee_id || '';
+    tr.dataset.date = intv.date || '';
+    tr.dataset.duplicatedFrom = intv.duplicated_from_intervention_id || '';
+
+    if (isDuplicated) {
+      tr.classList.add('schedule-duplicated-row');
+    }
 
     // Applique l’état replié/affiché selon collapsedWeeks
     if (collapsedWeeks[currentWeekKey] === true) {
@@ -981,7 +994,10 @@ async function loadInterventions() {
       <td>${dateLabel}</td>
       <td>${startStr}</td>
       <td>${endStr}</td>
-      <td>${fait}</td>
+      <td>
+        ${fait}
+        ${isDuplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
+      </td>
       <td>
         <div class="action-buttons">
           <button class="btn btn-secondary btn-small${editDisabledClass}"
@@ -1118,6 +1134,33 @@ if (interventionsTableBody) {
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (action === 'delete') {
+      const duplicatedFrom = row.dataset.duplicatedFrom || '';
+      const targetDate = row.dataset.date || '';
+      const employeeId = row.dataset.employeeId || '';
+
+      if (duplicatedFrom && targetDate && employeeId) {
+        const { error: skipError } = await supabase
+          .from('intervention_duplication_skips')
+          .upsert(
+            [
+              {
+                source_intervention_id: duplicatedFrom,
+                employee_id: employeeId,
+                target_date: targetDate,
+              },
+            ],
+            { onConflict: 'source_intervention_id,employee_id,target_date' }
+          );
+
+        if (skipError) {
+          setInterventionFormMessage(
+            skipError.message ?? "Impossible d'enregistrer la suppression de la duplication.",
+            'error'
+          );
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('interventions')
         .delete()
@@ -1372,9 +1415,8 @@ async function loadScheduleLookups() {
   }
 }
 
-async function duplicateCurrentWeekToNextWeek(employeeId) {
-  if (!employeeId) return;
-
+async function duplicateCurrentWeekToNextWeek(employeeId = null, options = {}) {
+  const { showMessage = true } = options;
   const currentMonday = getMonday(new Date());
   const nextMonday = addDays(currentMonday, 7);
   const followingMonday = addDays(currentMonday, 14);
@@ -1383,7 +1425,7 @@ async function duplicateCurrentWeekToNextWeek(employeeId) {
   const targetFrom = dateToInputValue(nextMonday);
   const targetTo = dateToInputValue(followingMonday);
 
-  const { data: sourceRows, error: sourceError } = await supabase
+  let sourceQuery = supabase
     .from('interventions_progress_admin')
     .select(`
       id,
@@ -1393,11 +1435,16 @@ async function duplicateCurrentWeekToNextWeek(employeeId) {
       start_time_planned,
       end_time_planned
     `)
-    .eq('employee_id', employeeId)
     .gte('date', sourceFrom)
     .lt('date', sourceTo)
     .order('date', { ascending: true })
     .order('start_time_planned', { ascending: true });
+
+  if (employeeId) {
+    sourceQuery = sourceQuery.eq('employee_id', employeeId);
+  }
+
+  const { data: sourceRows, error: sourceError } = await sourceQuery;
 
   if (sourceError) {
     console.warn('Duplication planning impossible :', sourceError.message);
@@ -1406,24 +1453,34 @@ async function duplicateCurrentWeekToNextWeek(employeeId) {
 
   if (!sourceRows || sourceRows.length === 0) return;
 
-  const { data: targetRows, error: targetError } = await supabase
+  let targetQuery = supabase
     .from('interventions')
     .select('id, duplicated_from_intervention_id, client_id, employee_id, date, start_time_planned, end_time_planned')
-    .eq('employee_id', employeeId)
     .gte('date', targetFrom)
     .lt('date', targetTo);
+
+  if (employeeId) {
+    targetQuery = targetQuery.eq('employee_id', employeeId);
+  }
+
+  const { data: targetRows, error: targetError } = await targetQuery;
 
   if (targetError) {
     console.warn('Lecture semaine suivante impossible :', targetError.message);
     return;
   }
 
-  const { data: skipRows, error: skipError } = await supabase
+  let skipQuery = supabase
     .from('intervention_duplication_skips')
     .select('source_intervention_id, employee_id, target_date')
-    .eq('employee_id', employeeId)
     .gte('target_date', targetFrom)
     .lt('target_date', targetTo);
+
+  if (employeeId) {
+    skipQuery = skipQuery.eq('employee_id', employeeId);
+  }
+
+  const { data: skipRows, error: skipError } = await skipQuery;
 
   if (skipError) {
     console.warn('Lecture suppressions de duplications impossible :', skipError.message);
@@ -1480,9 +1537,11 @@ async function duplicateCurrentWeekToNextWeek(employeeId) {
     return;
   }
 
-  setScheduleMessage(
-    `${rowsToInsert.length} intervention(s) dupliquée(s) vers la semaine suivante.`
-  );
+  if (showMessage) {
+    setScheduleMessage(
+      `${rowsToInsert.length} intervention(s) dupliquée(s) vers la semaine suivante.`
+    );
+  }
 }
 
 function renderScheduleRows(interventions, monday) {
