@@ -771,6 +771,19 @@ function resetInterventionForm() {
   setInterventionFormMessage('');
 }
 
+function normalizeInterventionState(value) {
+  return String(value || 'en attente').trim().toLowerCase();
+}
+
+function canAdminValidateOrDelete(value) {
+  const state = normalizeInterventionState(value);
+  return state !== 'fait' && state !== 'validé' && state !== 'valide';
+}
+
+function canEditPlannedIntervention(value) {
+  return normalizeInterventionState(value) === 'en attente';
+}
+
 async function loadInterventionsLookups() {
   if (!interventionClientSelect || !interventionEmployeeSelect) return;
 
@@ -941,10 +954,16 @@ async function loadInterventions() {
     const isManuallyValidated = validatedInterventions.has(intv.id);
     const fait = isManuallyValidated ? 'validé' : faitRaw;
 
-    const canEdit = !isManuallyValidated && fait === 'en attente';
-    const disabledAttr = canEdit ? '' : 'disabled';
-    const disabledClass = canEdit ? '' : ' disabled';
-    const disabledStyle = canEdit
+    const canEdit = !isManuallyValidated && canEditPlannedIntervention(fait);
+    const canFinalize = !isManuallyValidated && canAdminValidateOrDelete(fait);
+    const editDisabledAttr = canEdit ? '' : 'disabled';
+    const editDisabledClass = canEdit ? '' : ' disabled';
+    const editDisabledStyle = canEdit
+      ? ''
+      : 'style="background-color:#cccccc; color:#666666; cursor:not-allowed;"';
+    const finalizeDisabledAttr = canFinalize ? '' : 'disabled';
+    const finalizeDisabledClass = canFinalize ? '' : ' disabled';
+    const finalizeDisabledStyle = canFinalize
       ? ''
       : 'style="background-color:#cccccc; color:#666666; cursor:not-allowed;"';
 
@@ -965,15 +984,17 @@ async function loadInterventions() {
       <td>${fait}</td>
       <td>
         <div class="action-buttons">
-          <button class="btn btn-secondary btn-small${disabledClass}"
+          <button class="btn btn-secondary btn-small${editDisabledClass}"
                   data-action="edit"
-                  ${disabledAttr}
-                  ${disabledStyle}>Modifier</button>
-          <button class="btn btn-secondary btn-small${disabledClass}"
+                  ${editDisabledAttr}
+                  ${editDisabledStyle}>Modifier</button>
+          <button class="btn btn-secondary btn-small${finalizeDisabledClass}"
                   data-action="delete"
-                  ${disabledAttr}
-                  ${disabledStyle}>Supprimer</button>
-          <button class="btn btn-primary btn-small"
+                  ${finalizeDisabledAttr}
+                  ${finalizeDisabledStyle}>Supprimer</button>
+          <button class="btn btn-primary btn-small${finalizeDisabledClass}"
+                  ${finalizeDisabledAttr}
+                  ${finalizeDisabledStyle}
                   data-action="validate">Valider</button>
         </div>
       </td>
@@ -1049,10 +1070,24 @@ if (interventionsTableBody) {
     const id = row.dataset.id;
     if (!id) return;
 
-    const fait = row.dataset.fait;
+    const fait = row.dataset.fait || 'en attente';
 
-    if (action === 'edit' || action === 'delete') {
-      if (fait && fait !== 'en attente') {
+    if (action === 'edit') {
+      if (!canEditPlannedIntervention(fait)) {
+        setInterventionFormMessage(
+          "Cette intervention a déjà un historique : seul Valider ou Supprimer reste possible si elle n'est pas faite.",
+          'error'
+        );
+        return;
+      }
+    }
+
+    if (action === 'delete' || action === 'validate') {
+      if (!canAdminValidateOrDelete(fait)) {
+        setInterventionFormMessage(
+          "Cette intervention est déjà faite ou validée.",
+          'error'
+        );
         return;
       }
     }
@@ -1127,7 +1162,7 @@ if (interventionsTableBody) {
         row.dataset.fait = 'validé';
 
         row
-          .querySelectorAll('button[data-action="edit"], button[data-action="delete"]')
+          .querySelectorAll('button[data-action="edit"], button[data-action="delete"], button[data-action="validate"]')
           .forEach((btn) => {
             btn.disabled = true;
             btn.classList.add('disabled');
@@ -1367,9 +1402,12 @@ function renderScheduleRows(interventions, monday) {
       tr.dataset.fait = intv.fait || 'en attente';
 
       const statusLabel = intv.fait || 'en attente';
-      const canEdit = statusLabel === 'en attente';
-      const disabledAttr = canEdit ? '' : 'disabled';
-      const disabledClass = canEdit ? '' : ' disabled';
+      const canEdit = canEditPlannedIntervention(statusLabel);
+      const canFinalize = canAdminValidateOrDelete(statusLabel);
+      const editDisabledAttr = canEdit ? '' : 'disabled';
+      const editDisabledClass = canEdit ? '' : ' disabled';
+      const finalizeDisabledAttr = canFinalize ? '' : 'disabled';
+      const finalizeDisabledClass = canFinalize ? '' : ' disabled';
       const timeLabel = `${intv.start_time_planned || ''} - ${intv.end_time_planned || ''}`;
 
       tr.innerHTML = `
@@ -1380,12 +1418,15 @@ function renderScheduleRows(interventions, monday) {
         <td><span class="schedule-status">${escapeHtml(statusLabel)}</span></td>
         <td>
           <div class="action-buttons">
-            <button class="btn btn-secondary btn-small${disabledClass}"
+            <button class="btn btn-secondary btn-small${editDisabledClass}"
                     data-action="schedule-edit"
-                    ${disabledAttr}>Modifier</button>
-            <button class="btn btn-secondary btn-small${disabledClass}"
+                    ${editDisabledAttr}>Modifier</button>
+            <button class="btn btn-secondary btn-small${finalizeDisabledClass}"
                     data-action="schedule-delete"
-                    ${disabledAttr}>Supprimer</button>
+                    ${finalizeDisabledAttr}>Supprimer</button>
+            <button class="btn btn-primary btn-small${finalizeDisabledClass}"
+                    data-action="schedule-validate"
+                    ${finalizeDisabledAttr}>Valider</button>
           </div>
         </td>
       `;
@@ -1569,9 +1610,21 @@ if (scheduleTableBody) {
     if (!id) return;
 
     const fait = row.dataset.fait || 'en attente';
-    if (fait !== 'en attente') {
+
+    if (action === 'schedule-edit' && !canEditPlannedIntervention(fait)) {
       setScheduleFormMessage(
-        "Cette intervention est déjà effectuée, validée ou en anomalie : elle n'est pas modifiable ici.",
+        "Cette intervention a déjà un historique : seul Valider ou Supprimer reste possible si elle n'est pas faite.",
+        'error'
+      );
+      return;
+    }
+
+    if (
+      (action === 'schedule-delete' || action === 'schedule-validate') &&
+      !canAdminValidateOrDelete(fait)
+    ) {
+      setScheduleFormMessage(
+        "Cette intervention est déjà faite ou validée.",
         'error'
       );
       return;
@@ -1622,6 +1675,34 @@ if (scheduleTableBody) {
         resetScheduleForm();
       }
       setScheduleFormMessage('Intervention supprimée du planning.');
+      await loadEmployeeSchedule();
+      await loadInterventions();
+    } else if (action === 'schedule-validate') {
+      const confirmed = window.confirm(
+        'Valider cette intervention côté administrateur ?'
+      );
+      if (!confirmed) return;
+
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from('interventions')
+        .update({
+          status: 'done',
+          saved: true,
+          completed_at: nowIso,
+        })
+        .eq('id', id);
+
+      if (error) {
+        setScheduleFormMessage(
+          error.message ?? "Impossible de valider l'intervention.",
+          'error'
+        );
+        return;
+      }
+
+      validatedInterventions.add(id);
+      setScheduleFormMessage('Intervention validée manuellement.');
       await loadEmployeeSchedule();
       await loadInterventions();
     }
