@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "avsapp-copy",
+    "name": "avsapps",
     "slug": "avsapp-copy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon_108.png",
-    "scheme": "avsappcopy",
+    "scheme": "avsapps",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.pierre974.avsappcopy"
+      "package": "com.pierre974.avsapps"
     },
     "web": {
       "output": "static",

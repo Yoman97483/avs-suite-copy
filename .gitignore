@@ -4,6 +4,8 @@ mobile/node_modules/
 
 # Local handoff files containing temporary credentials.
 outputs/*.csv
+outputs/*.txt
+outputs/*.aab
 
 # Supabase local state can contain linked-project metadata.
 supabase/.branches/
