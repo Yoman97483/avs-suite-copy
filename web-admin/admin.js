@@ -75,6 +75,11 @@ async function geocodeAddress(address) {
 }
 
 // Sections / login
+const passwordResetSection = document.getElementById('password-reset-section');
+const passwordResetForm = document.getElementById('password-reset-form');
+const newPasswordInput = document.getElementById('new-password-input');
+const confirmPasswordInput = document.getElementById('confirm-password-input');
+const passwordResetMessage = document.getElementById('password-reset-message');
 const loginSection = document.getElementById('login-section');
 const adminSection = document.getElementById('admin-section');
 const loginForm = document.getElementById('login-form');
@@ -198,7 +203,36 @@ const clientMonthlyBilanMessage = document.getElementById('client-monthly-bilan-
 const clientMonthlyBilanTableBody = document.getElementById('client-monthly-bilan-table-body');
 const employeeMonthSummaryMessage = document.getElementById('employee-month-summary-message');
 
+function getAuthHashParams() {
+  return new URLSearchParams(window.location.hash.replace(/^#/, ''));
+}
+
+function isPasswordRecoveryRedirect() {
+  const params = getAuthHashParams();
+  return (
+    params.get('type') === 'recovery' ||
+    params.get('error_code') === 'otp_expired' ||
+    params.get('error') === 'access_denied'
+  );
+}
+
+function showPasswordReset(message = '', isError = false) {
+  passwordResetSection?.classList.remove('hidden');
+  loginSection.classList.add('hidden');
+  adminSection.classList.add('hidden');
+  logoutBtn.classList.add('hidden');
+  adminEmail.textContent = '';
+
+  if (passwordResetMessage) {
+    passwordResetMessage.textContent = message;
+    passwordResetMessage.classList.toggle('hidden', !message);
+    passwordResetMessage.classList.toggle('error', isError);
+    passwordResetMessage.classList.toggle('success', !!message && !isError);
+  }
+}
+
 function showLogin() {
+  passwordResetSection?.classList.add('hidden');
   loginSection.classList.remove('hidden');
   adminSection.classList.add('hidden');
   logoutBtn.classList.add('hidden');
@@ -230,6 +264,24 @@ function showAdmin(user) {
 }
 
 async function restoreSession() {
+  if (isPasswordRecoveryRedirect()) {
+    const params = getAuthHashParams();
+    const errorDescription = params.get('error_description');
+
+    if (params.get('error')) {
+      showPasswordReset(
+        errorDescription
+          ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
+          : 'Le lien de réinitialisation est invalide ou a expiré. Demandez un nouveau lien.',
+        true
+      );
+      return;
+    }
+
+    showPasswordReset();
+    return;
+  }
+
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     showLogin();
@@ -244,6 +296,52 @@ async function restoreSession() {
 }
 
 // ---- Connexion / déconnexion admin ----
+
+if (passwordResetForm) {
+  passwordResetForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const newPassword = newPasswordInput?.value.trim() ?? '';
+    const confirmPassword = confirmPasswordInput?.value.trim() ?? '';
+
+    if (passwordResetMessage) {
+      passwordResetMessage.classList.add('hidden');
+      passwordResetMessage.textContent = '';
+      passwordResetMessage.classList.remove('error', 'success');
+    }
+
+    if (!newPassword || !confirmPassword) {
+      showPasswordReset('Merci de saisir et confirmer le nouveau mot de passe.', true);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showPasswordReset('Le mot de passe doit contenir au moins 6 caractères.', true);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showPasswordReset('Les deux mots de passe ne correspondent pas.', true);
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      showPasswordReset(error.message ?? 'Impossible de changer le mot de passe.', true);
+      return;
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+    await supabase.auth.signOut();
+    showLogin();
+    loginError.textContent = 'Mot de passe modifié. Vous pouvez maintenant vous connecter.';
+    loginError.classList.remove('hidden', 'error');
+    loginError.classList.add('success');
+  });
+}
 
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();

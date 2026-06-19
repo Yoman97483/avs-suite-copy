@@ -113,6 +113,10 @@ input:disabled {
   color: #e03131;
 }
 
+.message.success {
+  color: #2f9e44;
+}
+
 .hint {
   font-size: 13px;
   margin-top: 8px;
