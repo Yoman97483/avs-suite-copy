@@ -244,7 +244,9 @@ input:disabled {
 }
 
 .data-table tbody tr.schedule-duplicated-row,
-.data-table tbody tr.schedule-duplicated-row:hover {
+.data-table tbody tr.schedule-duplicated-row:hover,
+.data-table tbody tr.intervention-duplicated-row,
+.data-table tbody tr.intervention-duplicated-row:hover {
   background: #d3f9d8;
 }
 

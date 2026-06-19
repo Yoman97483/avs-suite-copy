@@ -981,6 +981,7 @@ async function loadInterventions() {
 
     if (isDuplicated) {
       tr.classList.add('schedule-duplicated-row');
+      tr.classList.add('intervention-duplicated-row');
     }
 
     // Applique l’état replié/affiché selon collapsedWeeks
