@@ -243,12 +243,28 @@ input:disabled {
   color: #52616b;
 }
 
+.data-table tbody tr.schedule-duplicated-row,
+.data-table tbody tr.schedule-duplicated-row:hover {
+  background: #d3f9d8;
+}
+
 .schedule-status {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
   background: #e7f5ff;
   color: #0b7285;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.schedule-duplicate-label {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #2f9e44;
+  color: white;
   font-size: 12px;
   font-weight: 600;
 }

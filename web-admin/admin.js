@@ -1269,6 +1269,22 @@ function addDays(date, days) {
   return next;
 }
 
+function addDaysToDateValue(value, days) {
+  const date = parseInputDate(value);
+  if (!date) return '';
+  return dateToInputValue(addDays(date, days));
+}
+
+function interventionSlotKey(row) {
+  return [
+    row.client_id || '',
+    row.employee_id || '',
+    row.date || '',
+    row.start_time_planned || '',
+    row.end_time_planned || '',
+  ].join('|');
+}
+
 function setScheduleCurrentWeekIfEmpty(force = false) {
   if (!scheduleWeekStartInput) return;
   if (!force && scheduleWeekStartInput.value) return;
@@ -1356,6 +1372,119 @@ async function loadScheduleLookups() {
   }
 }
 
+async function duplicateCurrentWeekToNextWeek(employeeId) {
+  if (!employeeId) return;
+
+  const currentMonday = getMonday(new Date());
+  const nextMonday = addDays(currentMonday, 7);
+  const followingMonday = addDays(currentMonday, 14);
+  const sourceFrom = dateToInputValue(currentMonday);
+  const sourceTo = dateToInputValue(nextMonday);
+  const targetFrom = dateToInputValue(nextMonday);
+  const targetTo = dateToInputValue(followingMonday);
+
+  const { data: sourceRows, error: sourceError } = await supabase
+    .from('interventions_progress_admin')
+    .select(`
+      id,
+      client_id,
+      employee_id,
+      date,
+      start_time_planned,
+      end_time_planned
+    `)
+    .eq('employee_id', employeeId)
+    .gte('date', sourceFrom)
+    .lt('date', sourceTo)
+    .order('date', { ascending: true })
+    .order('start_time_planned', { ascending: true });
+
+  if (sourceError) {
+    console.warn('Duplication planning impossible :', sourceError.message);
+    return;
+  }
+
+  if (!sourceRows || sourceRows.length === 0) return;
+
+  const { data: targetRows, error: targetError } = await supabase
+    .from('interventions')
+    .select('id, duplicated_from_intervention_id, client_id, employee_id, date, start_time_planned, end_time_planned')
+    .eq('employee_id', employeeId)
+    .gte('date', targetFrom)
+    .lt('date', targetTo);
+
+  if (targetError) {
+    console.warn('Lecture semaine suivante impossible :', targetError.message);
+    return;
+  }
+
+  const { data: skipRows, error: skipError } = await supabase
+    .from('intervention_duplication_skips')
+    .select('source_intervention_id, employee_id, target_date')
+    .eq('employee_id', employeeId)
+    .gte('target_date', targetFrom)
+    .lt('target_date', targetTo);
+
+  if (skipError) {
+    console.warn('Lecture suppressions de duplications impossible :', skipError.message);
+    return;
+  }
+
+  const existingSourceIds = new Set(
+    (targetRows || [])
+      .map((row) => row.duplicated_from_intervention_id)
+      .filter(Boolean)
+  );
+  const existingSlots = new Set((targetRows || []).map(interventionSlotKey));
+  const skipped = new Set(
+    (skipRows || []).map((row) =>
+      [row.source_intervention_id, row.employee_id, row.target_date].join('|')
+    )
+  );
+
+  const rowsToInsert = [];
+
+  sourceRows.forEach((source) => {
+    const targetDate = addDaysToDateValue(source.date, 7);
+    if (!targetDate) return;
+
+    const skipKey = [source.id, source.employee_id, targetDate].join('|');
+    if (skipped.has(skipKey)) return;
+    if (existingSourceIds.has(source.id)) return;
+
+    const targetSlot = interventionSlotKey({
+      ...source,
+      date: targetDate,
+    });
+    if (existingSlots.has(targetSlot)) return;
+
+    rowsToInsert.push({
+      client_id: source.client_id,
+      employee_id: source.employee_id,
+      date: targetDate,
+      start_time_planned: source.start_time_planned,
+      end_time_planned: source.end_time_planned,
+      status: 'planned',
+      duplicated_from_intervention_id: source.id,
+    });
+  });
+
+  if (rowsToInsert.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from('interventions')
+    .insert(rowsToInsert);
+
+  if (insertError) {
+    console.warn('Insertion duplications planning impossible :', insertError.message);
+    return;
+  }
+
+  setScheduleMessage(
+    `${rowsToInsert.length} intervention(s) dupliquée(s) vers la semaine suivante.`
+  );
+}
+
 function renderScheduleRows(interventions, monday) {
   if (!scheduleTableBody) return;
 
@@ -1400,8 +1529,12 @@ function renderScheduleRows(interventions, monday) {
       const tr = document.createElement('tr');
       tr.dataset.id = intv.id;
       tr.dataset.fait = intv.fait || 'en attente';
+      tr.dataset.employeeId = intv.employee_id || '';
+      tr.dataset.date = intv.date || '';
+      tr.dataset.duplicatedFrom = intv.duplicated_from_intervention_id || '';
 
       const statusLabel = intv.fait || 'en attente';
+      const isDuplicated = Boolean(intv.duplicated_from_intervention_id);
       const canEdit = canEditPlannedIntervention(statusLabel);
       const canFinalize = canAdminValidateOrDelete(statusLabel);
       const editDisabledAttr = canEdit ? '' : 'disabled';
@@ -1410,12 +1543,19 @@ function renderScheduleRows(interventions, monday) {
       const finalizeDisabledClass = canFinalize ? '' : ' disabled';
       const timeLabel = `${intv.start_time_planned || ''} - ${intv.end_time_planned || ''}`;
 
+      if (isDuplicated) {
+        tr.classList.add('schedule-duplicated-row');
+      }
+
       tr.innerHTML = `
         <td>${rowIndex === 0 ? escapeHtml(weekdayLabel) : ''}</td>
         <td>${rowIndex === 0 ? escapeHtml(dateLabel) : ''}</td>
         <td>${escapeHtml(timeLabel)}</td>
         <td>${escapeHtml(intv.client_name || '')}</td>
-        <td><span class="schedule-status">${escapeHtml(statusLabel)}</span></td>
+        <td>
+          <span class="schedule-status">${escapeHtml(statusLabel)}</span>
+          ${isDuplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
+        </td>
         <td>
           <div class="action-buttons">
             <button class="btn btn-secondary btn-small${editDisabledClass}"
@@ -1463,6 +1603,8 @@ async function loadEmployeeSchedule() {
   const fromDate = dateToInputValue(monday);
   const toDate = dateToInputValue(nextMonday);
 
+  await duplicateCurrentWeekToNextWeek(employeeId);
+
   if (scheduleWeekTitle) {
     scheduleWeekTitle.textContent =
       'Planning du ' +
@@ -1485,7 +1627,8 @@ async function loadEmployeeSchedule() {
       end_time_planned,
       client_name,
       employee_name,
-      fait
+      fait,
+      duplicated_from_intervention_id
     `)
     .eq('employee_id', employeeId)
     .gte('date', fromDate)
@@ -1656,6 +1799,33 @@ if (scheduleTableBody) {
       setScheduleFormMessage("Modification d'une intervention du planning.");
       scheduleForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (action === 'schedule-delete') {
+      const duplicatedFrom = row.dataset.duplicatedFrom || '';
+      const targetDate = row.dataset.date || '';
+      const employeeId = row.dataset.employeeId || '';
+
+      if (duplicatedFrom && targetDate && employeeId) {
+        const { error: skipError } = await supabase
+          .from('intervention_duplication_skips')
+          .upsert(
+            [
+              {
+                source_intervention_id: duplicatedFrom,
+                employee_id: employeeId,
+                target_date: targetDate,
+              },
+            ],
+            { onConflict: 'source_intervention_id,employee_id,target_date' }
+          );
+
+        if (skipError) {
+          setScheduleFormMessage(
+            skipError.message ?? "Impossible d'enregistrer la suppression de la duplication.",
+            'error'
+          );
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('interventions')
         .delete()
