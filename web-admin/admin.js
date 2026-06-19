@@ -1656,11 +1656,6 @@ if (scheduleTableBody) {
       setScheduleFormMessage("Modification d'une intervention du planning.");
       scheduleForm?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (action === 'schedule-delete') {
-      const confirmed = window.confirm(
-        'Supprimer cette intervention du planning ?'
-      );
-      if (!confirmed) return;
-
       const { error } = await supabase
         .from('interventions')
         .delete()
