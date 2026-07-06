@@ -34,6 +34,19 @@ try {
   collapsedWeeks = {};
 }
 
+// --- Memorise les mois replies dans les bilans mensuels ---
+const MONTH_SUMMARY_COLLAPSE_KEY = 'avs_admin_month_summary_collapsed';
+let collapsedSummaryMonths = {};
+try {
+  const savedCollapsedSummaryMonths = localStorage.getItem(MONTH_SUMMARY_COLLAPSE_KEY);
+  collapsedSummaryMonths = savedCollapsedSummaryMonths
+    ? JSON.parse(savedCollapsedSummaryMonths)
+    : {};
+} catch (e) {
+  console.error('Erreur lecture collapsedSummaryMonths', e);
+  collapsedSummaryMonths = {};
+}
+
 // --- Google Maps Platform (geocodage adresse et calcul des distances) ---
 const GOOGLE_MAPS_API_PATH = '/api/google-maps';
 const SYNC_DISTANCES_API_PATH = '/api/sync-distances';
@@ -2507,14 +2520,45 @@ function getMonthParts(value) {
   };
 }
 
-function appendMonthGroupRow(tbody, label, colspan, monthKey) {
+function getCollapsedSummaryScope(scope) {
+  if (!collapsedSummaryMonths[scope]) collapsedSummaryMonths[scope] = {};
+  return collapsedSummaryMonths[scope];
+}
+
+function isSummaryMonthCollapsed(scope, monthKey) {
+  return getCollapsedSummaryScope(scope)[monthKey] === true;
+}
+
+function saveCollapsedSummaryMonths() {
+  try {
+    localStorage.setItem(
+      MONTH_SUMMARY_COLLAPSE_KEY,
+      JSON.stringify(collapsedSummaryMonths)
+    );
+  } catch (e) {
+    console.error('Erreur sauvegarde collapsedSummaryMonths', e);
+  }
+}
+
+function setSummaryMonthCollapsed(scope, monthKey, collapsed) {
+  const scopeState = getCollapsedSummaryScope(scope);
+  if (collapsed) {
+    scopeState[monthKey] = true;
+  } else {
+    delete scopeState[monthKey];
+  }
+  saveCollapsedSummaryMonths();
+}
+
+function appendMonthGroupRow(tbody, label, colspan, monthKey, scope) {
+  const collapsed = isSummaryMonthCollapsed(scope, monthKey);
   const tr = document.createElement('tr');
   tr.className = 'month-group-row';
   tr.dataset.monthKey = monthKey;
   tr.innerHTML = `
     <td colspan="${colspan}">
-      <button type="button" class="month-toggle" data-action="toggle-month" aria-expanded="true">
-        <span class="month-toggle-icon">▾</span>
+      <button type="button" class="month-toggle" data-action="toggle-month" aria-expanded="${!collapsed}">
+        <span class="month-toggle-icon">${collapsed ? '>' : 'v'}</span>
         <span>${label}</span>
       </button>
     </td>
@@ -2522,12 +2566,13 @@ function appendMonthGroupRow(tbody, label, colspan, monthKey) {
   tbody.appendChild(tr);
 }
 
-function toggleMonthRows(tbody, monthKey, button) {
+function toggleMonthRows(tbody, monthKey, button, scope) {
   const isExpanded = button.getAttribute('aria-expanded') !== 'false';
   const nextExpanded = !isExpanded;
   button.setAttribute('aria-expanded', String(nextExpanded));
   const icon = button.querySelector('.month-toggle-icon');
-  if (icon) icon.textContent = nextExpanded ? '▾' : '▸';
+  if (icon) icon.textContent = nextExpanded ? 'v' : '>';
+  setSummaryMonthCollapsed(scope, monthKey, !nextExpanded);
 
   tbody
     .querySelectorAll(`tr.month-detail-row[data-month-key="${monthKey}"]`)
@@ -2536,7 +2581,7 @@ function toggleMonthRows(tbody, monthKey, button) {
     });
 }
 
-function setupMonthToggle(tbody) {
+function setupMonthToggle(tbody, scope) {
   if (!tbody) return;
   tbody.addEventListener('click', (event) => {
     const target = event.target;
@@ -2546,12 +2591,12 @@ function setupMonthToggle(tbody) {
     const row = button.closest('tr.month-group-row');
     const monthKey = row?.dataset.monthKey;
     if (!monthKey) return;
-    toggleMonthRows(tbody, monthKey, button);
+    toggleMonthRows(tbody, monthKey, button, scope);
   });
 }
 
-setupMonthToggle(employeeMonthSummaryTableBody);
-setupMonthToggle(clientMonthlyBilanTableBody);
+setupMonthToggle(employeeMonthSummaryTableBody, 'employee');
+setupMonthToggle(clientMonthlyBilanTableBody, 'client');
 
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
@@ -2586,10 +2631,14 @@ async function loadEmployeeMonthSummary() {
 
       if (monthParts.key !== currentMonthKey) {
         currentMonthKey = monthParts.key;
-        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6, currentMonthKey);
+        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6, currentMonthKey, 'employee');
       }
       tr.classList.add('month-detail-row');
       tr.dataset.monthKey = currentMonthKey;
+      tr.classList.toggle(
+        'hidden',
+        isSummaryMonthCollapsed('employee', currentMonthKey)
+      );
 
       const hours =
         row.hours_worked == null
@@ -2689,10 +2738,14 @@ async function loadClientMonthlyBilan() {
 
       if (groupKey !== currentMonthKey) {
         currentMonthKey = groupKey;
-        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4, currentMonthKey);
+        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4, currentMonthKey, 'client');
       }
       tr.classList.add('month-detail-row');
       tr.dataset.monthKey = currentMonthKey;
+      tr.classList.toggle(
+        'hidden',
+        isSummaryMonthCollapsed('client', currentMonthKey)
+      );
 
       const hours =
         row.hours_worked == null
