@@ -2507,12 +2507,51 @@ function getMonthParts(value) {
   };
 }
 
-function appendMonthGroupRow(tbody, label, colspan) {
+function appendMonthGroupRow(tbody, label, colspan, monthKey) {
   const tr = document.createElement('tr');
   tr.className = 'month-group-row';
-  tr.innerHTML = `<td colspan="${colspan}">${label}</td>`;
+  tr.dataset.monthKey = monthKey;
+  tr.innerHTML = `
+    <td colspan="${colspan}">
+      <button type="button" class="month-toggle" data-action="toggle-month" aria-expanded="true">
+        <span class="month-toggle-icon">▾</span>
+        <span>${label}</span>
+      </button>
+    </td>
+  `;
   tbody.appendChild(tr);
 }
+
+function toggleMonthRows(tbody, monthKey, button) {
+  const isExpanded = button.getAttribute('aria-expanded') !== 'false';
+  const nextExpanded = !isExpanded;
+  button.setAttribute('aria-expanded', String(nextExpanded));
+  const icon = button.querySelector('.month-toggle-icon');
+  if (icon) icon.textContent = nextExpanded ? '▾' : '▸';
+
+  tbody
+    .querySelectorAll(`tr.month-detail-row[data-month-key="${monthKey}"]`)
+    .forEach((row) => {
+      row.classList.toggle('hidden', !nextExpanded);
+    });
+}
+
+function setupMonthToggle(tbody) {
+  if (!tbody) return;
+  tbody.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest('button[data-action="toggle-month"]');
+    if (!button) return;
+    const row = button.closest('tr.month-group-row');
+    const monthKey = row?.dataset.monthKey;
+    if (!monthKey) return;
+    toggleMonthRows(tbody, monthKey, button);
+  });
+}
+
+setupMonthToggle(employeeMonthSummaryTableBody);
+setupMonthToggle(clientMonthlyBilanTableBody);
 
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
@@ -2547,8 +2586,10 @@ async function loadEmployeeMonthSummary() {
 
       if (monthParts.key !== currentMonthKey) {
         currentMonthKey = monthParts.key;
-        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6);
+        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6, currentMonthKey);
       }
+      tr.classList.add('month-detail-row');
+      tr.dataset.monthKey = currentMonthKey;
 
       const hours =
         row.hours_worked == null
@@ -2648,8 +2689,10 @@ async function loadClientMonthlyBilan() {
 
       if (groupKey !== currentMonthKey) {
         currentMonthKey = groupKey;
-        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4);
+        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4, currentMonthKey);
       }
+      tr.classList.add('month-detail-row');
+      tr.dataset.monthKey = currentMonthKey;
 
       const hours =
         row.hours_worked == null

@@ -210,6 +210,25 @@ input:disabled {
   text-transform: capitalize;
 }
 
+.month-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.month-toggle-icon {
+  display: inline-block;
+  width: 16px;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
