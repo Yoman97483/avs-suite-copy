@@ -2477,6 +2477,43 @@ function setEmployeeMonthSummaryMessage(text, type = 'info') {
   }
 }
 
+function formatMonthYearLabel(year, monthNumber, fallback = '') {
+  const y = Number(year);
+  const m = Number(monthNumber);
+  if (Number.isInteger(y) && Number.isInteger(m) && m >= 1 && m <= 12) {
+    return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  return fallback || 'Mois non renseigné';
+}
+
+function getMonthParts(value) {
+  if (!value) return { year: null, monthNumber: null, key: '', label: '' };
+  const text = String(value);
+  const match = text.match(/^(\d{4})-(\d{2})/);
+  if (!match) {
+    return { year: null, monthNumber: null, key: text, label: text };
+  }
+
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  return {
+    year,
+    monthNumber,
+    key: `${year}-${String(monthNumber).padStart(2, '0')}`,
+    label: formatMonthYearLabel(year, monthNumber, text),
+  };
+}
+
+function appendMonthGroupRow(tbody, label, colspan) {
+  const tr = document.createElement('tr');
+  tr.className = 'month-group-row';
+  tr.innerHTML = `<td colspan="${colspan}">${label}</td>`;
+  tbody.appendChild(tr);
+}
+
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
 
@@ -2501,14 +2538,17 @@ async function loadEmployeeMonthSummary() {
     }
 
     employeeMonthSummaryTableBody.innerHTML = '';
+    let currentMonthKey = null;
 
     data.forEach((row) => {
       const tr = document.createElement('tr');
+      const monthParts = getMonthParts(row.month);
+      const monthLabel = monthParts.label;
 
-      const monthLabel =
-        row.month != null
-          ? String(row.month)
-          : '';
+      if (monthParts.key !== currentMonthKey) {
+        currentMonthKey = monthParts.key;
+        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6);
+      }
 
       const hours =
         row.hours_worked == null
@@ -2532,7 +2572,7 @@ async function loadEmployeeMonthSummary() {
           : Number(row.trips_with_missing_distance);
 
       tr.innerHTML = `
-        <td>${monthLabel}</td>
+        <td></td>
         <td>${row.first_name ?? ''}</td>
         <td>${row.last_name ?? ''}</td>
         <td>${hours}</td>
@@ -2585,6 +2625,7 @@ async function loadClientMonthlyBilan() {
     }
 
     clientMonthlyBilanTableBody.innerHTML = '';
+    let currentMonthKey = null;
 
     data.forEach((row) => {
       const tr = document.createElement('tr');
@@ -2598,6 +2639,17 @@ async function loadClientMonthlyBilan() {
             });
 
       const yearLabel = row.year == null ? '' : String(row.year);
+      const groupKey = `${yearLabel}-${monthLabel}`;
+      const groupLabel = formatMonthYearLabel(
+        row.year,
+        row.month_number,
+        [monthLabel, yearLabel].filter(Boolean).join('/')
+      );
+
+      if (groupKey !== currentMonthKey) {
+        currentMonthKey = groupKey;
+        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4);
+      }
 
       const hours =
         row.hours_worked == null
