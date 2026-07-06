@@ -34,27 +34,25 @@ try {
   collapsedWeeks = {};
 }
 
-// --- LocationIQ (géocodage adresse → coordonnées) ---
-const LOCATIONIQ_TOKEN = 'pk.9d814555a5670ab2b6030dabe3f2bc93';
+// --- Google Maps Platform (geocodage adresse et calcul des distances) ---
+const GOOGLE_MAPS_API_PATH = '/api/google-maps';
+const SYNC_DISTANCES_API_PATH = '/api/sync-distances';
+let missingDistanceSyncPromise = null;
 
 async function geocodeAddress(address) {
   try {
     if (!address) return { latitude: null, longitude: null };
-    const url =
-      'https://eu1.locationiq.com/v1/search?format=json&limit=1&key=' +
-      encodeURIComponent(LOCATIONIQ_TOKEN) +
-      '&q=' +
-      encodeURIComponent(address);
-
-    const res = await fetch(url, { method: 'GET' });
-    if (!res.ok) throw new Error('Erreur LocationIQ (' + res.status + ')');
+    const res = await fetch(GOOGLE_MAPS_API_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'geocode', address }),
+    });
     const json = await res.json();
-    if (!Array.isArray(json) || json.length === 0) {
-      throw new Error('Adresse introuvable');
+    if (!res.ok) {
+      throw new Error(json?.error || 'Erreur Google Geocoding');
     }
-    const top = json[0];
-    const latitude = top && top.lat ? Number(top.lat) : null;
-    const longitude = top && top.lon ? Number(top.lon) : null;
+    const latitude = json.latitude == null ? null : Number(json.latitude);
+    const longitude = json.longitude == null ? null : Number(json.longitude);
     if (
       latitude == null ||
       Number.isNaN(latitude) ||
@@ -63,15 +61,134 @@ async function geocodeAddress(address) {
     ) {
       throw new Error('Coordonnées invalides');
     }
-    return { latitude, longitude };
+    return {
+      latitude,
+      longitude,
+      formattedAddress: json.formattedAddress || null,
+    };
   } catch (e) {
-    console.warn('[LocationIQ] Géocodage impossible :', e?.message || e);
+    console.warn('[Google Maps] Geocodage impossible :', e?.message || e);
     return {
       latitude: null,
       longitude: null,
       _geocodeError: e?.message || String(e),
     };
   }
+}
+
+async function calculateDistanceBetweenPoints(origin, destination) {
+  const res = await fetch(GOOGLE_MAPS_API_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'distance', origin, destination }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || 'Erreur Google Distance Matrix');
+  }
+
+  const distanceKm = Number(json.distanceKm);
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    throw new Error('Distance Google invalide');
+  }
+  return distanceKm;
+}
+
+async function getClientCoordinates(clientId) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, name, address, latitude, longitude')
+    .eq('id', clientId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error('Client introuvable');
+
+  let latitude = data.latitude == null ? null : Number(data.latitude);
+  let longitude = data.longitude == null ? null : Number(data.longitude);
+
+  if (
+    (latitude == null ||
+      Number.isNaN(latitude) ||
+      longitude == null ||
+      Number.isNaN(longitude)) &&
+    data.address
+  ) {
+    const geo = await geocodeAddress(data.address);
+    latitude = geo.latitude;
+    longitude = geo.longitude;
+    if (geo._geocodeError || latitude == null || longitude == null) {
+      throw new Error(
+        `Coordonnees GPS manquantes pour ${data.name || 'ce client'}`
+      );
+    }
+
+    await supabase
+      .from('clients')
+      .update({
+        latitude,
+        longitude,
+        geocoded_at: new Date().toISOString(),
+        geocode_status: 'ok',
+      })
+      .eq('id', clientId);
+  }
+
+  if (
+    latitude == null ||
+    Number.isNaN(latitude) ||
+    longitude == null ||
+    Number.isNaN(longitude)
+  ) {
+    throw new Error(`Coordonnees GPS manquantes pour ${data.name || 'ce client'}`);
+  }
+
+  return { latitude, longitude };
+}
+
+async function calculateDistanceForClients(clientAId, clientBId) {
+  const [origin, destination] = await Promise.all([
+    getClientCoordinates(clientAId),
+    getClientCoordinates(clientBId),
+  ]);
+  return calculateDistanceBetweenPoints(origin, destination);
+}
+
+async function syncNeededClientDistances(options = {}) {
+  const { silent = true } = options;
+  if (missingDistanceSyncPromise) return missingDistanceSyncPromise;
+
+  missingDistanceSyncPromise = (async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return null;
+
+    const response = await fetch(SYNC_DISTANCES_API_PATH, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ limit: 50 }),
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result?.error || 'Synchronisation des distances impossible');
+    }
+
+    if (!silent && result.inserted > 0) {
+      setMissingDistancesMessage(
+        `${result.inserted} distance(s) necessaire(s) calculee(s) automatiquement.`
+      );
+    }
+
+    return result;
+  })().finally(() => {
+    missingDistanceSyncPromise = null;
+  });
+
+  return missingDistanceSyncPromise;
 }
 
 // Sections / login
@@ -760,20 +877,33 @@ if (clientForm) {
     try {
       let latitude = null;
       let longitude = null;
+      let geocode_status = address ? 'pending' : null;
       if (address) {
         setClientFormMessage('Géocodage de l’adresse…');
         const geo = await geocodeAddress(address);
         latitude = geo.latitude;
         longitude = geo.longitude;
         if (geo._geocodeError) {
+          geocode_status = 'error';
           setClientFormMessage(
             'Client enregistré sans coordonnées GPS : ' + geo._geocodeError
           );
+        } else {
+          geocode_status = 'ok';
         }
       }
 
       if (id) {
-        const payload = { name, address, phone, notes, latitude, longitude };
+        const payload = {
+          name,
+          address,
+          phone,
+          notes,
+          latitude,
+          longitude,
+          geocode_status,
+        };
+        if (geocode_status === 'ok') payload.geocoded_at = new Date().toISOString();
         if (latitude == null) delete payload.latitude;
         if (longitude == null) delete payload.longitude;
 
@@ -784,14 +914,27 @@ if (clientForm) {
         if (error) throw error;
         setClientFormMessage('Client mis à jour.');
       } else {
+        const payload = {
+          name,
+          address,
+          phone,
+          notes,
+          latitude,
+          longitude,
+          geocode_status,
+          geocoded_at: geocode_status === 'ok' ? new Date().toISOString() : null,
+        };
         const { error } = await supabase
           .from('clients')
-          .insert([{ name, address, phone, notes, latitude, longitude }]);
+          .insert([payload]);
         if (error) throw error;
         setClientFormMessage('Client ajouté.');
       }
 
       await loadClients();
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
       resetClientForm();
     } catch (err) {
       setClientFormMessage(
@@ -1157,6 +1300,9 @@ if (interventionForm) {
       }
 
       await loadInterventions();
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
       resetInterventionForm();
     } catch (err) {
       setInterventionFormMessage(
@@ -1298,6 +1444,9 @@ if (interventionsTableBody) {
         }
 
         validatedInterventions.add(id);
+        syncNeededClientDistances().catch((err) => {
+          console.warn('Synchronisation automatique des distances impossible', err);
+        });
 
         const faitCell = row.querySelector('td:nth-child(6)');
         if (faitCell) {
@@ -1889,6 +2038,9 @@ if (scheduleForm) {
 
       await loadEmployeeSchedule();
       await loadInterventions();
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
       resetScheduleForm();
     } catch (err) {
       setScheduleFormMessage(
@@ -2027,6 +2179,9 @@ if (scheduleTableBody) {
       }
 
       validatedInterventions.add(id);
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
       setScheduleFormMessage('Intervention validée manuellement.');
       await loadEmployeeSchedule();
       await loadInterventions();
@@ -2178,8 +2333,17 @@ if (distanceForm) {
 
     let distanceKm = null;
     if (!distanceStr) {
-      setDistanceFormMessage('La distance en km est obligatoire.', 'error');
-      return;
+      try {
+        setDistanceFormMessage('Calcul de la distance avec Google Maps...');
+        distanceKm = await calculateDistanceForClients(cA, cB);
+        if (distanceKmInput) distanceKmInput.value = String(distanceKm);
+      } catch (err) {
+        setDistanceFormMessage(
+          err?.message ?? 'Calcul automatique de la distance impossible.',
+          'error'
+        );
+        return;
+      }
     } else {
       distanceKm = Number(String(distanceStr).replace(',', '.'));
       if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
@@ -2467,6 +2631,26 @@ async function loadMissingDistances() {
     '<tr><td colspan="4">Chargement…</td></tr>';
   setMissingDistancesMessage('');
 
+  try {
+    const syncResult = await syncNeededClientDistances({ silent: false });
+    if (syncResult?.inserted > 0) {
+      setMissingDistancesMessage(
+        `${syncResult.inserted} distance(s) necessaire(s) calculee(s) automatiquement.`
+      );
+    }
+    if (syncResult?.errors?.length) {
+      setMissingDistancesMessage(
+        `${syncResult.errors.length} distance(s) n'ont pas pu etre calculee(s) automatiquement.`,
+        'error'
+      );
+    }
+  } catch (err) {
+    setMissingDistancesMessage(
+      err?.message ?? 'Synchronisation automatique des distances impossible.',
+      'error'
+    );
+  }
+
   const { data, error } = await supabase
     .from('missing_client_distances')
     .select('*')
@@ -2509,6 +2693,9 @@ async function loadMissingDistances() {
                placeholder="km" />
       </td>
       <td>
+        <button class="btn btn-secondary btn-small" data-action="calculate-missing-distance">
+          Calculer
+        </button>
         <button class="btn btn-primary btn-small" data-action="save-missing-distance">
           Enregistrer
         </button>
@@ -2523,7 +2710,10 @@ if (missingDistancesTableBody) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const action = target.dataset.action;
-    if (action !== 'save-missing-distance') return;
+    if (
+      action !== 'save-missing-distance' &&
+      action !== 'calculate-missing-distance'
+    ) return;
 
     const row = target.closest('tr');
     if (!row) return;
@@ -2535,12 +2725,26 @@ if (missingDistancesTableBody) {
     const input = row.querySelector('.missing-distance-input');
     if (!input) return;
 
-    const raw = input.value.trim();
+    let raw = input.value.trim();
+    if (!raw || action === 'calculate-missing-distance') {
+      try {
+        setMissingDistancesMessage('Calcul de la distance avec Google Maps...');
+        const calculatedKm = await calculateDistanceForClients(clientAId, clientBId);
+        input.value = String(calculatedKm);
+        raw = input.value.trim();
+        setMissingDistancesMessage('Distance calculee. Cliquez sur Enregistrer.');
+        if (action === 'calculate-missing-distance') return;
+      } catch (err) {
+        setMissingDistancesMessage(
+          err?.message ?? 'Calcul automatique de la distance impossible.',
+          'error'
+        );
+        return;
+      }
+    }
+
     if (!raw) {
-      setMissingDistancesMessage(
-        'Merci de saisir une distance en km.',
-        'error'
-      );
+      setMissingDistancesMessage('Merci de saisir une distance en km.', 'error');
       return;
     }
 
