@@ -2525,8 +2525,12 @@ function getCollapsedSummaryScope(scope) {
   return collapsedSummaryMonths[scope];
 }
 
-function isSummaryMonthCollapsed(scope, monthKey) {
-  return getCollapsedSummaryScope(scope)[monthKey] === true;
+function getSummaryCollapseKey(type, key) {
+  return `${type}:${key}`;
+}
+
+function isSummaryGroupCollapsed(scope, type, key) {
+  return getCollapsedSummaryScope(scope)[getSummaryCollapseKey(type, key)] === true;
 }
 
 function saveCollapsedSummaryMonths() {
@@ -2540,25 +2544,27 @@ function saveCollapsedSummaryMonths() {
   }
 }
 
-function setSummaryMonthCollapsed(scope, monthKey, collapsed) {
+function setSummaryGroupCollapsed(scope, type, key, collapsed) {
   const scopeState = getCollapsedSummaryScope(scope);
+  const collapseKey = getSummaryCollapseKey(type, key);
   if (collapsed) {
-    scopeState[monthKey] = true;
+    scopeState[collapseKey] = true;
   } else {
-    delete scopeState[monthKey];
+    delete scopeState[collapseKey];
   }
   saveCollapsedSummaryMonths();
 }
 
-function appendMonthGroupRow(tbody, label, colspan, monthKey, scope) {
-  const collapsed = isSummaryMonthCollapsed(scope, monthKey);
+function appendSummaryGroupRow(tbody, label, colspan, groupKey, scope, type) {
+  const collapsed = isSummaryGroupCollapsed(scope, type, groupKey);
   const tr = document.createElement('tr');
-  tr.className = 'month-group-row';
-  tr.dataset.monthKey = monthKey;
+  tr.className = `${type}-group-row`;
+  tr.dataset.summaryGroupType = type;
+  tr.dataset.groupKey = groupKey;
   tr.innerHTML = `
     <td colspan="${colspan}">
-      <button type="button" class="month-toggle" data-action="toggle-month" aria-expanded="${!collapsed}">
-        <span class="month-toggle-icon">${collapsed ? '>' : 'v'}</span>
+      <button type="button" class="summary-toggle ${type}-toggle" data-action="toggle-summary-group" aria-expanded="${!collapsed}">
+        <span class="summary-toggle-icon">${collapsed ? '>' : 'v'}</span>
         <span>${label}</span>
       </button>
     </td>
@@ -2566,37 +2572,70 @@ function appendMonthGroupRow(tbody, label, colspan, monthKey, scope) {
   tbody.appendChild(tr);
 }
 
-function toggleMonthRows(tbody, monthKey, button, scope) {
-  const isExpanded = button.getAttribute('aria-expanded') !== 'false';
-  const nextExpanded = !isExpanded;
-  button.setAttribute('aria-expanded', String(nextExpanded));
-  const icon = button.querySelector('.month-toggle-icon');
-  if (icon) icon.textContent = nextExpanded ? 'v' : '>';
-  setSummaryMonthCollapsed(scope, monthKey, !nextExpanded);
+function updateSummaryGroupVisibility(tbody, scope) {
+  const collapsedYears = new Set();
+  tbody.querySelectorAll('tr.year-group-row').forEach((row) => {
+    const yearKey = row.dataset.groupKey;
+    if (!yearKey) return;
+    const button = row.querySelector('button[data-action="toggle-summary-group"]');
+    const collapsed = isSummaryGroupCollapsed(scope, 'year', yearKey);
+    if (button) {
+      button.setAttribute('aria-expanded', String(!collapsed));
+      const icon = button.querySelector('.summary-toggle-icon');
+      if (icon) icon.textContent = collapsed ? '>' : 'v';
+    }
+    if (collapsed) collapsedYears.add(yearKey);
+  });
 
-  tbody
-    .querySelectorAll(`tr.month-detail-row[data-month-key="${monthKey}"]`)
-    .forEach((row) => {
-      row.classList.toggle('hidden', !nextExpanded);
-    });
+  tbody.querySelectorAll('tr.month-group-row').forEach((row) => {
+    const yearKey = row.dataset.yearKey;
+    const monthKey = row.dataset.groupKey;
+    if (!yearKey || !monthKey) return;
+    const hiddenByYear = collapsedYears.has(yearKey);
+    const collapsed = isSummaryGroupCollapsed(scope, 'month', monthKey);
+    row.classList.toggle('hidden', hiddenByYear);
+    const button = row.querySelector('button[data-action="toggle-summary-group"]');
+    if (button) {
+      button.setAttribute('aria-expanded', String(!collapsed));
+      const icon = button.querySelector('.summary-toggle-icon');
+      if (icon) icon.textContent = collapsed ? '>' : 'v';
+    }
+  });
+
+  tbody.querySelectorAll('tr.summary-detail-row').forEach((row) => {
+    const yearKey = row.dataset.yearKey;
+    const monthKey = row.dataset.monthKey;
+    const hidden =
+      (yearKey && collapsedYears.has(yearKey)) ||
+      (monthKey && isSummaryGroupCollapsed(scope, 'month', monthKey));
+    row.classList.toggle('hidden', Boolean(hidden));
+  });
 }
 
-function setupMonthToggle(tbody, scope) {
+function toggleSummaryGroup(tbody, groupKey, type, button, scope) {
+  const isExpanded = button.getAttribute('aria-expanded') !== 'false';
+  const nextExpanded = !isExpanded;
+  setSummaryGroupCollapsed(scope, type, groupKey, !nextExpanded);
+  updateSummaryGroupVisibility(tbody, scope);
+}
+
+function setupSummaryGroupToggle(tbody, scope) {
   if (!tbody) return;
   tbody.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const button = target.closest('button[data-action="toggle-month"]');
+    const button = target.closest('button[data-action="toggle-summary-group"]');
     if (!button) return;
-    const row = button.closest('tr.month-group-row');
-    const monthKey = row?.dataset.monthKey;
-    if (!monthKey) return;
-    toggleMonthRows(tbody, monthKey, button, scope);
+    const row = button.closest('tr');
+    const groupKey = row?.dataset.groupKey;
+    const type = row?.dataset.summaryGroupType;
+    if (!groupKey || !type) return;
+    toggleSummaryGroup(tbody, groupKey, type, button, scope);
   });
 }
 
-setupMonthToggle(employeeMonthSummaryTableBody, 'employee');
-setupMonthToggle(clientMonthlyBilanTableBody, 'client');
+setupSummaryGroupToggle(employeeMonthSummaryTableBody, 'employee');
+setupSummaryGroupToggle(clientMonthlyBilanTableBody, 'client');
 
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
@@ -2622,23 +2661,47 @@ async function loadEmployeeMonthSummary() {
     }
 
     employeeMonthSummaryTableBody.innerHTML = '';
+    let currentYearKey = null;
     let currentMonthKey = null;
 
     data.forEach((row) => {
       const tr = document.createElement('tr');
       const monthParts = getMonthParts(row.month);
       const monthLabel = monthParts.label;
+      const yearKey =
+        monthParts.year == null ? 'annee-inconnue' : String(monthParts.year);
+      const yearLabel =
+        monthParts.year == null ? 'Année non renseignée' : String(monthParts.year);
+
+      if (yearKey !== currentYearKey) {
+        currentYearKey = yearKey;
+        currentMonthKey = null;
+        appendSummaryGroupRow(
+          employeeMonthSummaryTableBody,
+          yearLabel,
+          6,
+          currentYearKey,
+          'employee',
+          'year'
+        );
+      }
 
       if (monthParts.key !== currentMonthKey) {
         currentMonthKey = monthParts.key;
-        appendMonthGroupRow(employeeMonthSummaryTableBody, monthLabel, 6, currentMonthKey, 'employee');
+        appendSummaryGroupRow(
+          employeeMonthSummaryTableBody,
+          monthLabel,
+          6,
+          currentMonthKey,
+          'employee',
+          'month'
+        );
+        const monthGroupRow = employeeMonthSummaryTableBody.lastElementChild;
+        if (monthGroupRow) monthGroupRow.dataset.yearKey = currentYearKey;
       }
-      tr.classList.add('month-detail-row');
+      tr.classList.add('summary-detail-row');
+      tr.dataset.yearKey = currentYearKey;
       tr.dataset.monthKey = currentMonthKey;
-      tr.classList.toggle(
-        'hidden',
-        isSummaryMonthCollapsed('employee', currentMonthKey)
-      );
 
       const hours =
         row.hours_worked == null
@@ -2672,10 +2735,11 @@ async function loadEmployeeMonthSummary() {
 
       employeeMonthSummaryTableBody.appendChild(tr);
     });
+    updateSummaryGroupVisibility(employeeMonthSummaryTableBody, 'employee');
   } catch (err) {
     console.error('Erreur loadEmployeeMonthSummary', err);
     employeeMonthSummaryTableBody.innerHTML =
-      '<tr><td colspan="6">Erreur lors du chargement du bilan mensuel.</td></tr>';
+      '<tr><td colspan="6">Erreur lors du chargement du bilan heure employé.</td></tr>';
     setEmployeeMonthSummaryMessage(err.message ?? 'Erreur inconnue.', 'error');
   }
 }
@@ -2715,6 +2779,7 @@ async function loadClientMonthlyBilan() {
     }
 
     clientMonthlyBilanTableBody.innerHTML = '';
+    let currentYearKey = null;
     let currentMonthKey = null;
 
     data.forEach((row) => {
@@ -2729,6 +2794,8 @@ async function loadClientMonthlyBilan() {
             });
 
       const yearLabel = row.year == null ? '' : String(row.year);
+      const yearKey = yearLabel || 'annee-inconnue';
+      const displayYearLabel = yearLabel || 'Année non renseignée';
       const groupKey = `${yearLabel}-${monthLabel}`;
       const groupLabel = formatMonthYearLabel(
         row.year,
@@ -2736,16 +2803,35 @@ async function loadClientMonthlyBilan() {
         [monthLabel, yearLabel].filter(Boolean).join('/')
       );
 
+      if (yearKey !== currentYearKey) {
+        currentYearKey = yearKey;
+        currentMonthKey = null;
+        appendSummaryGroupRow(
+          clientMonthlyBilanTableBody,
+          displayYearLabel,
+          4,
+          currentYearKey,
+          'client',
+          'year'
+        );
+      }
+
       if (groupKey !== currentMonthKey) {
         currentMonthKey = groupKey;
-        appendMonthGroupRow(clientMonthlyBilanTableBody, groupLabel, 4, currentMonthKey, 'client');
+        appendSummaryGroupRow(
+          clientMonthlyBilanTableBody,
+          groupLabel,
+          4,
+          currentMonthKey,
+          'client',
+          'month'
+        );
+        const monthGroupRow = clientMonthlyBilanTableBody.lastElementChild;
+        if (monthGroupRow) monthGroupRow.dataset.yearKey = currentYearKey;
       }
-      tr.classList.add('month-detail-row');
+      tr.classList.add('summary-detail-row');
+      tr.dataset.yearKey = currentYearKey;
       tr.dataset.monthKey = currentMonthKey;
-      tr.classList.toggle(
-        'hidden',
-        isSummaryMonthCollapsed('client', currentMonthKey)
-      );
 
       const hours =
         row.hours_worked == null
@@ -2764,10 +2850,11 @@ async function loadClientMonthlyBilan() {
 
       clientMonthlyBilanTableBody.appendChild(tr);
     });
+    updateSummaryGroupVisibility(clientMonthlyBilanTableBody, 'client');
   } catch (err) {
     console.error('Erreur loadClientMonthlyBilan', err);
     clientMonthlyBilanTableBody.innerHTML =
-      '<tr><td colspan="4">Erreur lors du chargement du bilan mensuel client.</td></tr>';
+      '<tr><td colspan="4">Erreur lors du chargement du bilan heure client.</td></tr>';
     setClientMonthlyBilanMessage(err.message ?? 'Erreur inconnue.', 'error');
   }
 }

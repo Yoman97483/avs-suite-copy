@@ -197,11 +197,17 @@ input:disabled {
   background: #f1f5f9;
 }
 
+.data-table tbody tr.year-group-row,
+.data-table tbody tr.year-group-row:hover {
+  background: rgba(11, 114, 133, 0.22);
+}
+
 .data-table tbody tr.month-group-row,
 .data-table tbody tr.month-group-row:hover {
   background: rgba(11, 114, 133, 0.12);
 }
 
+.year-group-row td,
 .month-group-row td {
   padding-top: 12px;
   padding-bottom: 10px;
@@ -210,7 +216,15 @@ input:disabled {
   text-transform: capitalize;
 }
 
-.month-toggle {
+.year-group-row td {
+  font-size: 16px;
+}
+
+.month-group-row td {
+  padding-left: 22px;
+}
+
+.summary-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -224,7 +238,7 @@ input:disabled {
   text-transform: inherit;
 }
 
-.month-toggle-icon {
+.summary-toggle-icon {
   display: inline-block;
   width: 16px;
 }
