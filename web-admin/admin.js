@@ -210,6 +210,7 @@ const passwordResetForm = document.getElementById('password-reset-form');
 const newPasswordInput = document.getElementById('new-password-input');
 const confirmPasswordInput = document.getElementById('confirm-password-input');
 const passwordResetMessage = document.getElementById('password-reset-message');
+const topbarTitle = document.getElementById('topbar-title');
 const loginSection = document.getElementById('login-section');
 const adminSection = document.getElementById('admin-section');
 const loginForm = document.getElementById('login-form');
@@ -295,7 +296,6 @@ const interventionFormMessage = document.getElementById('intervention-form-messa
 const scheduleEmployeeSelect = document.getElementById('schedule-employee-id');
 const scheduleWeekStartInput = document.getElementById('schedule-week-start');
 const scheduleCurrentWeekBtn = document.getElementById('schedule-current-week-btn');
-const scheduleLoadBtn = document.getElementById('schedule-load-btn');
 const scheduleMessage = document.getElementById('schedule-message');
 const scheduleForm = document.getElementById('schedule-form');
 const scheduleInterventionIdInput = document.getElementById('schedule-intervention-id');
@@ -346,6 +346,8 @@ function isPasswordRecoveryRedirect() {
 }
 
 function showPasswordReset(message = '', isError = false) {
+  document.title = 'AVS';
+  if (topbarTitle) topbarTitle.textContent = 'AVS';
   passwordResetSection?.classList.remove('hidden');
   loginSection.classList.add('hidden');
   adminSection.classList.add('hidden');
@@ -361,6 +363,8 @@ function showPasswordReset(message = '', isError = false) {
 }
 
 function showLogin() {
+  document.title = 'AVS - Administration';
+  if (topbarTitle) topbarTitle.textContent = 'AVS - Administration';
   passwordResetSection?.classList.add('hidden');
   loginSection.classList.remove('hidden');
   adminSection.classList.add('hidden');
@@ -377,6 +381,8 @@ function showLogin() {
 }
 
 function showAdmin(user) {
+  document.title = 'AVS - Administration';
+  if (topbarTitle) topbarTitle.textContent = 'AVS - Administration';
   loginSection.classList.add('hidden');
   adminSection.classList.remove('hidden');
   logoutBtn.classList.remove('hidden');
@@ -2021,13 +2027,6 @@ async function loadEmployeeSchedule() {
 if (scheduleCurrentWeekBtn) {
   scheduleCurrentWeekBtn.addEventListener('click', () => {
     setScheduleCurrentWeekIfEmpty(true);
-    resetScheduleForm();
-    loadEmployeeSchedule();
-  });
-}
-
-if (scheduleLoadBtn) {
-  scheduleLoadBtn.addEventListener('click', () => {
     resetScheduleForm();
     loadEmployeeSchedule();
   });

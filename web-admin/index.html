@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>AVS - Administration</h1>
+      <h1 id="topbar-title">AVS - Administration</h1>
       <div id="admin-email" class="admin-email"></div>
       <button id="logout-btn" class="btn btn-secondary hidden">Se déconnecter</button>
     </header>
@@ -156,12 +156,6 @@
               </div>
             </form>
             <p id="employee-form-message" class="message"></p>
-            <p class="hint">
-              Lors de la <strong>création</strong> d'un employé, son compte utilisateur Supabase est créé
-              et un email lui est envoyé pour définir son mot de passe.<br />
-              Utilisez le bouton <strong>Envoyer reset mot de passe</strong> dans la liste pour
-              renvoyer ce lien après une modification ou à tout moment.
-            </p>
           </div>
 
           <div class="card">
@@ -337,9 +331,6 @@
               <div class="schedule-actions">
                 <button type="button" id="schedule-current-week-btn" class="btn btn-secondary">
                   Semaine actuelle
-                </button>
-                <button type="button" id="schedule-load-btn" class="btn btn-primary">
-                  Afficher
                 </button>
               </div>
             </div>
