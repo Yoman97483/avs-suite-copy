@@ -264,7 +264,6 @@ const employeeLastNameInput = document.getElementById('employee-last-name');
 const employeeAddressInput = document.getElementById('employee-address');
 const employeePhoneInput = document.getElementById('employee-phone');
 const employeeEmailInput = document.getElementById('employee-email');
-const employeePasswordInput = document.getElementById('employee-password');
 const employeeResetBtn = document.getElementById('employee-reset-btn');
 const employeeFormMessage = document.getElementById('employee-form-message');
 
@@ -590,15 +589,22 @@ function setEmployeeFormMessage(text, type = 'info') {
   }
 }
 
-function resetEmployeeForm() {
+function resetEmployeeForm(clearMessage = true) {
   employeeIdInput.value = '';
   employeeFirstNameInput.value = '';
   employeeLastNameInput.value = '';
   employeeAddressInput.value = '';
   employeePhoneInput.value = '';
   employeeEmailInput.value = '';
-  employeePasswordInput.value = '';
-  setEmployeeFormMessage('');
+  if (clearMessage) setEmployeeFormMessage('');
+}
+
+function generateTemporaryPassword() {
+  const alphabet =
+    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint8Array(28);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('');
 }
 
 async function loadEmployees() {
@@ -646,6 +652,7 @@ async function loadEmployees() {
       <td>
         <div class="action-buttons">
           <button class="btn btn-secondary btn-small" data-action="edit">Modifier</button>
+          <button class="btn btn-secondary btn-small" data-action="password-reset">Envoyer reset mot de passe</button>
           <button class="btn btn-secondary btn-small" data-action="delete">Supprimer</button>
         </div>
       </td>
@@ -665,16 +672,15 @@ if (employeeForm) {
     const address = employeeAddressInput.value.trim() || null;
     const phone = employeePhoneInput.value.trim() || null;
     const email = employeeEmailInput.value.trim() || null;
-    const password = employeePasswordInput.value.trim() || null;
 
     if (!first_name || !last_name) {
       setEmployeeFormMessage('Prénom et nom sont obligatoires.', 'error');
       return;
     }
 
-    if (!id && (!email || !password)) {
+    if (!id && !email) {
       setEmployeeFormMessage(
-        "Pour créer un employé, l'email et le mot de passe sont obligatoires.",
+        "Pour créer un employé, l'email est obligatoire.",
         'error'
       );
       return;
@@ -687,14 +693,12 @@ if (employeeForm) {
           .update({ first_name, last_name, address, phone, email })
           .eq('id', id);
         if (error) throw error;
-        setEmployeeFormMessage(
-          "Employé mis à jour. Le mot de passe n'a pas été modifié depuis cette interface."
-        );
+        setEmployeeFormMessage('Employé mis à jour.');
       } else {
         const { data: signUpData, error: signUpError } =
           await supabaseAuthAdmin.auth.signUp({
             email,
-            password,
+            password: generateTemporaryPassword(),
           });
 
         if (signUpError || !signUpData.user) {
@@ -718,11 +722,25 @@ if (employeeForm) {
           throw insertError;
         }
 
-        setEmployeeFormMessage('Employé créé avec son compte utilisateur.');
+        const { error: resetError } =
+          await supabaseAuthAdmin.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}${window.location.pathname}`,
+          });
+
+        if (resetError) {
+          setEmployeeFormMessage(
+            `Employé créé, mais l'email de définition du mot de passe n'a pas pu être envoyé : ${resetError.message}`,
+            'error'
+          );
+        } else {
+          setEmployeeFormMessage(
+            `Employé créé. Un email pour définir son mot de passe a été envoyé à ${email}.`
+          );
+        }
       }
 
       await loadEmployees();
-      resetEmployeeForm();
+      resetEmployeeForm(false);
     } catch (err) {
       setEmployeeFormMessage(
         err?.message ?? "Erreur lors de l'enregistrement de l'employé.",
@@ -751,7 +769,35 @@ if (employeesTableBody) {
     const id = row.dataset.id;
     if (!id) return;
 
-    if (action === 'edit') {
+    if (action === 'password-reset') {
+      const cells = row.querySelectorAll('td');
+      const email = (cells[4]?.textContent || '').trim();
+
+      if (!email) {
+        alert("Cet employé n'a pas d'adresse email enregistrée.");
+        return;
+      }
+
+      target.setAttribute('disabled', 'disabled');
+      const originalLabel = target.textContent;
+      target.textContent = 'Envoi en cours...';
+
+      const { error } = await supabaseAuthAdmin.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+      });
+
+      target.removeAttribute('disabled');
+      target.textContent = originalLabel;
+
+      if (error) {
+        alert(
+          `Impossible d'envoyer le lien de réinitialisation à ${email} : ${error.message}`
+        );
+        return;
+      }
+
+      alert(`Email de réinitialisation envoyé à ${email}.`);
+    } else if (action === 'edit') {
       const cells = row.querySelectorAll('td');
       employeeIdInput.value = id;
       employeeFirstNameInput.value = (cells[0].textContent || '').trim();
@@ -759,9 +805,8 @@ if (employeesTableBody) {
       employeeAddressInput.value = (cells[2].textContent || '').trim();
       employeePhoneInput.value = (cells[3].textContent || '').trim();
       employeeEmailInput.value = (cells[4].textContent || '').trim();
-      employeePasswordInput.value = '';
       setEmployeeFormMessage(
-        "Modification d'un employé existant : le mot de passe n'est pas modifié ici. Utiliser le dashboard Supabase pour le changer."
+        "Modification d'un employé existant. Utilisez le bouton Envoyer reset mot de passe dans la liste pour lui transmettre un lien."
       );
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (action === 'delete') {

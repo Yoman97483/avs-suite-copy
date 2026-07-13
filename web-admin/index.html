@@ -145,10 +145,6 @@
                 Email (identifiant de connexion)
                 <input type="email" id="employee-email" autocomplete="off" />
               </label>
-              <label>
-                Mot de passe initial (création uniquement)
-                <input type="password" id="employee-password" autocomplete="new-password" />
-              </label>
 
               <div class="form-actions">
                 <button type="button" id="employee-reset-btn" class="btn btn-secondary">
@@ -162,10 +158,9 @@
             <p id="employee-form-message" class="message"></p>
             <p class="hint">
               Lors de la <strong>création</strong> d'un employé, son compte utilisateur Supabase est créé
-              avec l'email et le mot de passe indiqués.<br />
-              Lors de la <strong>modification</strong> d'un employé existant, le mot de passe n'est pas
-              modifié depuis cette interface. Pour changer un mot de passe, utiliser le dashboard
-              Supabase (Auth → Users).
+              et un email lui est envoyé pour définir son mot de passe.<br />
+              Utilisez le bouton <strong>Envoyer reset mot de passe</strong> dans la liste pour
+              renvoyer ce lien après une modification ou à tout moment.
             </p>
           </div>
 
