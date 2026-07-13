@@ -1131,8 +1131,6 @@ async function loadInterventionsLookups() {
 async function loadInterventions() {
   if (!interventionsTableBody) return;
 
-  await duplicateCurrentWeekToNextWeek(null, { showMessage: false });
-
   // On ne vide plus le tableau tant qu’on n’a pas de nouvelles données,
   // pour éviter tout clignotement.
   const hadRowsBefore = interventionsTableBody.querySelector('tr');
@@ -1978,8 +1976,6 @@ async function loadEmployeeSchedule() {
   const nextMonday = addDays(monday, 7);
   const fromDate = dateToInputValue(monday);
   const toDate = dateToInputValue(nextMonday);
-
-  await duplicateCurrentWeekToNextWeek(employeeId);
 
   if (scheduleWeekTitle) {
     scheduleWeekTitle.textContent =
