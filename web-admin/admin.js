@@ -1849,16 +1849,19 @@ function renderScheduleRows(interventions, monday) {
 
     dayRows.forEach((intv, rowIndex) => {
       const tr = document.createElement('tr');
+      const businessStatus = intv.fait || 'en attente';
+      const statusLabel = intv.actual_start && !intv.actual_end
+        ? 'en cours'
+        : businessStatus;
       tr.dataset.id = intv.id;
-      tr.dataset.fait = intv.fait || 'en attente';
+      tr.dataset.fait = businessStatus;
       tr.dataset.employeeId = intv.employee_id || '';
       tr.dataset.date = intv.date || '';
       tr.dataset.duplicatedFrom = intv.duplicated_from_intervention_id || '';
 
-      const statusLabel = intv.fait || 'en attente';
       const isDuplicated = Boolean(intv.duplicated_from_intervention_id);
-      const canEdit = canEditPlannedIntervention(statusLabel);
-      const canFinalize = canAdminValidateOrDelete(statusLabel);
+      const canEdit = canEditPlannedIntervention(businessStatus);
+      const canFinalize = canAdminValidateOrDelete(businessStatus);
       const editDisabledAttr = canEdit ? '' : 'disabled';
       const editDisabledClass = canEdit ? '' : ' disabled';
       const finalizeDisabledAttr = canFinalize ? '' : 'disabled';
@@ -1950,6 +1953,8 @@ async function loadEmployeeSchedule() {
       client_name,
       employee_name,
       fait,
+      actual_start,
+      actual_end,
       duplicated_from_intervention_id
     `)
     .eq('employee_id', employeeId)
