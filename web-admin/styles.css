@@ -203,12 +203,14 @@ input:disabled {
 }
 
 .data-table tbody tr.month-group-row,
-.data-table tbody tr.month-group-row:hover {
+.data-table tbody tr.month-group-row:hover,
+.data-table tbody tr.week-group-row:hover {
   background: rgba(11, 114, 133, 0.12);
 }
 
 .year-group-row td,
-.month-group-row td {
+.month-group-row td,
+.week-group-row td {
   padding-top: 12px;
   padding-bottom: 10px;
   color: #0b7285;
@@ -222,6 +224,11 @@ input:disabled {
 
 .month-group-row td {
   padding-left: 22px;
+}
+
+.week-group-row td {
+  padding-left: 44px;
+  font-weight: 600;
 }
 
 .summary-toggle {

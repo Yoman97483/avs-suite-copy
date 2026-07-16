@@ -23,17 +23,6 @@ const ADMIN_EMAIL = 'avs.run974@gmail.com';
 // --- Mémorise les interventions validées manuellement dans cette session ---
 const validatedInterventions = new Set();
 
-// --- Mémorise les semaines repliées (persistant dans le navigateur) ---
-const WEEK_COLLAPSE_KEY = 'avs_admin_week_collapsed';
-let collapsedWeeks = {};
-try {
-  const savedCollapsed = localStorage.getItem(WEEK_COLLAPSE_KEY);
-  collapsedWeeks = savedCollapsed ? JSON.parse(savedCollapsed) : {};
-} catch (e) {
-  console.error('Erreur lecture collapsedWeeks', e);
-  collapsedWeeks = {};
-}
-
 // --- Memorise les mois replies dans les bilans mensuels ---
 const MONTH_SUMMARY_COLLAPSE_KEY = 'avs_admin_month_summary_collapsed';
 let collapsedSummaryMonths = {};
@@ -1174,9 +1163,11 @@ async function loadInterventions() {
   }
 
   // On a des données : on rafraîchit proprement le tableau,
-  // en les groupant par semaine dans des bandeaux déroulants.
+  // en les groupant par année, mois et semaine dans des bandeaux déroulants.
   interventionsTableBody.innerHTML = '';
 
+  let currentYearKey = null;
+  let currentMonthKey = null;
   let currentWeekKey = null;
 
   // petite fonction pour calculer la semaine (lundi → dimanche)
@@ -1223,33 +1214,64 @@ async function loadInterventions() {
   interventions.forEach((intv) => {
     const dateStr = intv.date ?? null;
     const weekInfo = getWeekInfo(dateStr);
+    const monthParts = getMonthParts(dateStr);
+    const yearKey = monthParts.year == null ? 'annee-inconnue' : String(monthParts.year);
+    const yearLabel = monthParts.year == null ? 'Année non renseignée' : yearKey;
+    const monthKey = monthParts.key || 'mois-inconnu';
+    const monthLabel = monthParts.label || 'Mois non renseigné';
+    const weekKey = `${monthKey}:${weekInfo.weekKey}`;
 
-    // Si on change de semaine, on insère un bandeau déroulant
-    if (weekInfo.weekKey !== currentWeekKey) {
-      currentWeekKey = weekInfo.weekKey;
+    if (yearKey !== currentYearKey) {
+      currentYearKey = yearKey;
+      currentMonthKey = null;
+      currentWeekKey = null;
+      appendSummaryGroupRow(
+        interventionsTableBody,
+        yearLabel,
+        7,
+        currentYearKey,
+        'interventions',
+        'year'
+      );
+    }
 
-      const isCollapsed = collapsedWeeks[currentWeekKey] === true;
+    if (monthKey !== currentMonthKey) {
+      currentMonthKey = monthKey;
+      currentWeekKey = null;
+      appendSummaryGroupRow(
+        interventionsTableBody,
+        monthLabel,
+        7,
+        currentMonthKey,
+        'interventions',
+        'month'
+      );
+      const monthGroupRow = interventionsTableBody.lastElementChild;
+      if (monthGroupRow) monthGroupRow.dataset.yearKey = currentYearKey;
+    }
 
-      const headerTr = document.createElement('tr');
-      headerTr.classList.add('week-header');
-      headerTr.dataset.weekKey = currentWeekKey;
-      headerTr.dataset.collapsed = isCollapsed ? 'true' : 'false';
-      headerTr.innerHTML = `
-        <td colspan="7"
-            style="
-              background-color: rgba(11,114,133,0.1);
-              font-weight: 600;
-              cursor: pointer;
-              padding: 6px 8px;
-            ">
-          ${weekInfo.label}
-        </td>
-      `;
-      interventionsTableBody.appendChild(headerTr);
+    if (weekKey !== currentWeekKey) {
+      currentWeekKey = weekKey;
+      appendSummaryGroupRow(
+        interventionsTableBody,
+        weekInfo.label,
+        7,
+        currentWeekKey,
+        'interventions',
+        'week'
+      );
+      const weekGroupRow = interventionsTableBody.lastElementChild;
+      if (weekGroupRow) {
+        weekGroupRow.dataset.yearKey = currentYearKey;
+        weekGroupRow.dataset.monthKey = currentMonthKey;
+      }
     }
 
     const tr = document.createElement('tr');
-    tr.dataset.week = currentWeekKey;
+    tr.classList.add('summary-detail-row');
+    tr.dataset.yearKey = currentYearKey;
+    tr.dataset.monthKey = currentMonthKey;
+    tr.dataset.weekKey = currentWeekKey;
 
     const dateLabel = intv.date
       ? new Date(intv.date).toLocaleDateString('fr-FR')
@@ -1289,11 +1311,6 @@ async function loadInterventions() {
       tr.classList.add('intervention-duplicated-row');
     }
 
-    // Applique l’état replié/affiché selon collapsedWeeks
-    if (collapsedWeeks[currentWeekKey] === true) {
-      tr.style.display = 'none';
-    }
-
     tr.innerHTML = `
       <td>${clientName}</td>
       <td>${employeeName}</td>
@@ -1323,6 +1340,7 @@ async function loadInterventions() {
     `;
     interventionsTableBody.appendChild(tr);
   });
+  updateSummaryGroupVisibility(interventionsTableBody, 'interventions');
 }
 
 if (interventionForm) {
@@ -1536,35 +1554,6 @@ if (interventionsTableBody) {
     }
   });
 
-  // Gestion du bandeau déroulant par semaine + persistance dans localStorage
-  interventionsTableBody.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const tr = target.closest('tr');
-    if (!tr) return;
-    if (!tr.classList.contains('week-header')) return;
-
-    const weekKey = tr.dataset.weekKey;
-    if (!weekKey) return;
-
-    const collapsed = tr.dataset.collapsed === 'true';
-    const newCollapsed = !collapsed;
-    tr.dataset.collapsed = newCollapsed ? 'true' : 'false';
-
-    // Met à jour l’affichage des lignes de la semaine
-    const rows = interventionsTableBody.querySelectorAll(`tr[data-week="${weekKey}"]`);
-    rows.forEach((row) => {
-      row.style.display = newCollapsed ? 'none' : '';
-    });
-
-    // Sauvegarde dans collapsedWeeks + localStorage
-    collapsedWeeks[weekKey] = newCollapsed;
-    try {
-      localStorage.setItem(WEEK_COLLAPSE_KEY, JSON.stringify(collapsedWeeks));
-    } catch (e) {
-      console.error('Erreur sauvegarde collapsedWeeks', e);
-    }
-  });
 }
 
 // --------- Gestion Emploi du temps ---------
@@ -2619,6 +2608,8 @@ function appendSummaryGroupRow(tbody, label, colspan, groupKey, scope, type) {
 
 function updateSummaryGroupVisibility(tbody, scope) {
   const collapsedYears = new Set();
+  const collapsedMonths = new Set();
+  const collapsedWeeks = new Set();
   tbody.querySelectorAll('tr.year-group-row').forEach((row) => {
     const yearKey = row.dataset.groupKey;
     if (!yearKey) return;
@@ -2639,6 +2630,26 @@ function updateSummaryGroupVisibility(tbody, scope) {
     const hiddenByYear = collapsedYears.has(yearKey);
     const collapsed = isSummaryGroupCollapsed(scope, 'month', monthKey);
     row.classList.toggle('hidden', hiddenByYear);
+    if (collapsed) collapsedMonths.add(monthKey);
+    const button = row.querySelector('button[data-action="toggle-summary-group"]');
+    if (button) {
+      button.setAttribute('aria-expanded', String(!collapsed));
+      const icon = button.querySelector('.summary-toggle-icon');
+      if (icon) icon.textContent = collapsed ? '>' : 'v';
+    }
+  });
+
+  tbody.querySelectorAll('tr.week-group-row').forEach((row) => {
+    const yearKey = row.dataset.yearKey;
+    const monthKey = row.dataset.monthKey;
+    const weekKey = row.dataset.groupKey;
+    if (!weekKey) return;
+    const hiddenByParent =
+      (yearKey && collapsedYears.has(yearKey)) ||
+      (monthKey && collapsedMonths.has(monthKey));
+    const collapsed = isSummaryGroupCollapsed(scope, 'week', weekKey);
+    row.classList.toggle('hidden', Boolean(hiddenByParent));
+    if (collapsed) collapsedWeeks.add(weekKey);
     const button = row.querySelector('button[data-action="toggle-summary-group"]');
     if (button) {
       button.setAttribute('aria-expanded', String(!collapsed));
@@ -2650,9 +2661,11 @@ function updateSummaryGroupVisibility(tbody, scope) {
   tbody.querySelectorAll('tr.summary-detail-row').forEach((row) => {
     const yearKey = row.dataset.yearKey;
     const monthKey = row.dataset.monthKey;
+    const weekKey = row.dataset.weekKey;
     const hidden =
       (yearKey && collapsedYears.has(yearKey)) ||
-      (monthKey && isSummaryGroupCollapsed(scope, 'month', monthKey));
+      (monthKey && collapsedMonths.has(monthKey)) ||
+      (weekKey && collapsedWeeks.has(weekKey));
     row.classList.toggle('hidden', Boolean(hidden));
   });
 }
@@ -2681,6 +2694,7 @@ function setupSummaryGroupToggle(tbody, scope) {
 
 setupSummaryGroupToggle(employeeMonthSummaryTableBody, 'employee');
 setupSummaryGroupToggle(clientMonthlyBilanTableBody, 'client');
+setupSummaryGroupToggle(interventionsTableBody, 'interventions');
 
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
