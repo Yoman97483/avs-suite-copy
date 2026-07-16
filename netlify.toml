@@ -1,3 +1,8 @@
 [build]
   publish = "web-admin"
   functions = "netlify/functions"
+
+[[headers]]
+  for = "/admin.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
