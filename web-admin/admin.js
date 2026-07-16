@@ -51,6 +51,58 @@ try {
 const GOOGLE_MAPS_API_PATH = '/api/google-maps';
 const SYNC_DISTANCES_API_PATH = '/api/sync-distances';
 let missingDistanceSyncPromise = null;
+let pointageRealtimeChannel = null;
+let pointageRealtimeRefreshTimer = null;
+
+function refreshActivePointageView() {
+  if (pointageRealtimeRefreshTimer) {
+    clearTimeout(pointageRealtimeRefreshTimer);
+  }
+
+  pointageRealtimeRefreshTimer = setTimeout(() => {
+    pointageRealtimeRefreshTimer = null;
+    const activeTabId = document.querySelector('.tab.active')?.id;
+
+    if (activeTabId === 'interventions-tab') {
+      void loadInterventions();
+    } else if (activeTabId === 'intervention-bilan-tab') {
+      void loadInterventionBilan();
+    } else if (activeTabId === 'schedule-tab') {
+      void loadEmployeeSchedule();
+    } else if (activeTabId === 'pointages-tab') {
+      void loadPointages();
+    }
+  }, 150);
+}
+
+function subscribeToPointageInserts() {
+  if (pointageRealtimeChannel) return;
+
+  pointageRealtimeChannel = supabase
+    .channel('admin-pointages-refresh')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'pointages' },
+      refreshActivePointageView
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Realtime] Ecoute des nouveaux pointages indisponible :', status);
+      }
+    });
+}
+
+function stopPointageRealtimeSubscription() {
+  if (pointageRealtimeRefreshTimer) {
+    clearTimeout(pointageRealtimeRefreshTimer);
+    pointageRealtimeRefreshTimer = null;
+  }
+  if (!pointageRealtimeChannel) return;
+
+  const channel = pointageRealtimeChannel;
+  pointageRealtimeChannel = null;
+  void supabase.removeChannel(channel);
+}
 
 async function geocodeAddress(address) {
   try {
@@ -357,6 +409,7 @@ function isPasswordRecoveryRedirect() {
 }
 
 function showPasswordReset(message = '', isError = false) {
+  stopPointageRealtimeSubscription();
   document.title = 'AVS';
   if (topbarTitle) topbarTitle.textContent = 'AVS';
   passwordResetSection?.classList.remove('hidden');
@@ -374,6 +427,7 @@ function showPasswordReset(message = '', isError = false) {
 }
 
 function showLogin() {
+  stopPointageRealtimeSubscription();
   document.title = 'AVS - Administration';
   if (topbarTitle) topbarTitle.textContent = 'AVS - Administration';
   passwordResetSection?.classList.add('hidden');
@@ -407,6 +461,7 @@ function showAdmin(user) {
   if (typeof resetEmployeeForm === 'function') {
     resetEmployeeForm();
   }
+  subscribeToPointageInserts();
 }
 
 async function restoreSession() {
