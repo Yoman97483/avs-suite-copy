@@ -614,12 +614,6 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     const section = document.getElementById(tabId);
     if (section) section.classList.add('active');
 
-    // On coupe les auto-refresh
-    stopAutoRefreshInterventions();
-    stopAutoRefreshSchedule();
-    stopAutoRefreshInterventionBilan();
-    stopAutoRefreshPointages();
-
     // Puis on charge l’onglet sélectionné
     if (tabId === 'employees-tab') {
       resetEmployeeForm();
@@ -629,20 +623,16 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     } else if (tabId === 'interventions-tab') {
       loadInterventionsLookups();
       loadInterventions();
-      startAutoRefreshInterventions();
     } else if (tabId === 'intervention-bilan-tab') {
       loadInterventionBilanLookups();
       loadInterventionBilan();
-      startAutoRefreshInterventionBilan();
     } else if (tabId === 'schedule-tab') {
       loadScheduleLookups().then(() => {
         setScheduleCurrentWeekIfEmpty();
         loadEmployeeSchedule();
       });
-      startAutoRefreshSchedule();
     } else if (tabId === 'pointages-tab') {
       loadPointages();
-      startAutoRefreshPointages();
     } else if (tabId === 'distances-tab') {
       loadClientsForDistances();
       loadDistances();
@@ -3675,49 +3665,6 @@ async function loadPointages() {
   });
 }
 
-// --------- Auto-refresh ---------
-
-let interventionsInterval = null;
-let scheduleInterval = null;
-let interventionBilanInterval = null;
-let pointagesInterval = null;
-
-function startAutoRefreshInterventions() {
-  if (interventionsInterval) clearInterval(interventionsInterval);
-  interventionsInterval = setInterval(loadInterventions, 10000);
-}
-
-function stopAutoRefreshInterventions() {
-  if (interventionsInterval) clearInterval(interventionsInterval);
-}
-
-function startAutoRefreshSchedule() {
-  if (scheduleInterval) clearInterval(scheduleInterval);
-  scheduleInterval = setInterval(loadEmployeeSchedule, 10000);
-}
-
-function stopAutoRefreshSchedule() {
-  if (scheduleInterval) clearInterval(scheduleInterval);
-}
-
-function startAutoRefreshInterventionBilan() {
-  if (interventionBilanInterval) clearInterval(interventionBilanInterval);
-  interventionBilanInterval = setInterval(loadInterventionBilan, 10000);
-}
-
-function stopAutoRefreshInterventionBilan() {
-  if (interventionBilanInterval) clearInterval(interventionBilanInterval);
-}
-
-function startAutoRefreshPointages() {
-  if (pointagesInterval) clearInterval(pointagesInterval);
-  pointagesInterval = setInterval(loadPointages, 10000);
-}
-
-function stopAutoRefreshPointages() {
-  if (pointagesInterval) clearInterval(pointagesInterval);
-}
-
 if (pointagesTableBody) {
   pointagesTableBody.addEventListener('click', async (event) => {
     const target = event.target;
@@ -3742,7 +3689,6 @@ if (pointagesTableBody) {
     }
 
     await loadPointages();
-    startAutoRefreshPointages();
   });
 }
 
