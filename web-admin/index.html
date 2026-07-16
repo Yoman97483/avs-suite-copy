@@ -318,6 +318,45 @@
           <p class="hint">
             Interventions classées par année, mois et semaine. Une semaine est rattachée au mois de son lundi.
           </p>
+
+          <div class="card">
+            <h3>Ajouter / modifier une intervention</h3>
+            <form id="intervention-bilan-form" class="form-grid">
+              <input type="hidden" id="intervention-bilan-id" />
+
+              <label>
+                Client
+                <select id="intervention-bilan-client-id"></select>
+              </label>
+              <label>
+                Employ&eacute;
+                <select id="intervention-bilan-employee-id"></select>
+              </label>
+              <label>
+                Date
+                <input type="date" id="intervention-bilan-date" />
+              </label>
+              <label>
+                Heure de d&eacute;but
+                <input type="time" id="intervention-bilan-start-time" />
+              </label>
+              <label>
+                Heure de fin
+                <input type="time" id="intervention-bilan-end-time" />
+              </label>
+
+              <div class="form-actions">
+                <button type="button" id="intervention-bilan-reset-btn" class="btn btn-secondary">
+                  Nouvelle intervention
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+            <p id="intervention-bilan-form-message" class="message"></p>
+          </div>
+
           <p id="intervention-bilan-message" class="message"></p>
 
           <div class="card">
@@ -331,11 +370,12 @@
                   <th>Heure début (prévue)</th>
                   <th>Heure fin (prévue)</th>
                   <th>Statut</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="intervention-bilan-table-body">
                 <tr>
-                  <td colspan="6">Aucun bilan chargé. Choisissez l&apos;onglet Bilan intervention.</td>
+                  <td colspan="7">Aucun bilan chargé. Choisissez l&apos;onglet Bilan intervention.</td>
                 </tr>
               </tbody>
             </table>
@@ -554,6 +594,6 @@
       </section>
     </main>
 
-    <script type="module" src="./admin.js?v=20260716-4"></script>
+    <script type="module" src="./admin.js?v=20260716-5"></script>
   </body>
 </html>

@@ -293,6 +293,15 @@ const interventionResetBtn = document.getElementById('intervention-reset-btn');
 const interventionFormMessage = document.getElementById('intervention-form-message');
 const interventionBilanMessage = document.getElementById('intervention-bilan-message');
 const interventionBilanTableBody = document.getElementById('intervention-bilan-table-body');
+const interventionBilanForm = document.getElementById('intervention-bilan-form');
+const interventionBilanIdInput = document.getElementById('intervention-bilan-id');
+const interventionBilanClientSelect = document.getElementById('intervention-bilan-client-id');
+const interventionBilanEmployeeSelect = document.getElementById('intervention-bilan-employee-id');
+const interventionBilanDateInput = document.getElementById('intervention-bilan-date');
+const interventionBilanStartTimeInput = document.getElementById('intervention-bilan-start-time');
+const interventionBilanEndTimeInput = document.getElementById('intervention-bilan-end-time');
+const interventionBilanResetBtn = document.getElementById('intervention-bilan-reset-btn');
+const interventionBilanFormMessage = document.getElementById('intervention-bilan-form-message');
 
 // Emploi du temps – éléments du DOM
 const scheduleEmployeeSelect = document.getElementById('schedule-employee-id');
@@ -565,6 +574,7 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
       loadInterventions();
       startAutoRefreshInterventions();
     } else if (tabId === 'intervention-bilan-tab') {
+      loadInterventionBilanLookups();
       loadInterventionBilan();
     } else if (tabId === 'schedule-tab') {
       loadScheduleLookups().then(() => {
@@ -1080,6 +1090,24 @@ function resetInterventionForm() {
   interventionEndTimeInput.value = '';
   if (interventionIsWeeklyInput) interventionIsWeeklyInput.checked = false;
   setInterventionFormMessage('');
+}
+
+function setInterventionBilanFormMessage(message, type = 'info') {
+  if (!interventionBilanFormMessage) return;
+  interventionBilanFormMessage.textContent = message || '';
+  interventionBilanFormMessage.classList.remove('error');
+  if (type === 'error') interventionBilanFormMessage.classList.add('error');
+}
+
+function resetInterventionBilanForm() {
+  if (!interventionBilanForm) return;
+  interventionBilanIdInput.value = '';
+  interventionBilanClientSelect.value = '';
+  interventionBilanEmployeeSelect.value = '';
+  interventionBilanDateInput.value = '';
+  interventionBilanStartTimeInput.value = '';
+  interventionBilanEndTimeInput.value = '';
+  setInterventionBilanFormMessage('');
 }
 
 function normalizeInterventionState(value) {
@@ -2738,10 +2766,50 @@ function getInterventionBilanWeekInfo(dateStr) {
   };
 }
 
+async function loadInterventionBilanLookups() {
+  if (!interventionBilanClientSelect || !interventionBilanEmployeeSelect) return;
+
+  const selectedClient = interventionBilanClientSelect.value;
+  const selectedEmployee = interventionBilanEmployeeSelect.value;
+  const [{ data: clients, error: clientsError }, { data: employees, error: employeesError }] =
+    await Promise.all([
+      supabase.from('clients').select('id, name').order('name', { ascending: true }),
+      supabase
+        .from('employees')
+        .select('id, first_name, last_name')
+        .order('last_name', { ascending: true })
+        .order('first_name', { ascending: true }),
+    ]);
+
+  if (!clientsError) {
+    interventionBilanClientSelect.innerHTML =
+      '<option value="">-- Choisir un client --</option>';
+    (clients || []).forEach((client) => {
+      const option = document.createElement('option');
+      option.value = client.id;
+      option.textContent = client.name || '';
+      interventionBilanClientSelect.appendChild(option);
+    });
+    interventionBilanClientSelect.value = selectedClient;
+  }
+
+  if (!employeesError) {
+    interventionBilanEmployeeSelect.innerHTML =
+      '<option value="">-- Choisir un employé --</option>';
+    (employees || []).forEach((employee) => {
+      const option = document.createElement('option');
+      option.value = employee.id;
+      option.textContent = `${employee.first_name ?? ''} ${employee.last_name ?? ''}`.trim();
+      interventionBilanEmployeeSelect.appendChild(option);
+    });
+    interventionBilanEmployeeSelect.value = selectedEmployee;
+  }
+}
+
 async function loadInterventionBilan() {
   if (!interventionBilanTableBody) return;
 
-  interventionBilanTableBody.innerHTML = '<tr><td colspan="6">Chargement…</td></tr>';
+  interventionBilanTableBody.innerHTML = '<tr><td colspan="7">Chargement…</td></tr>';
   if (interventionBilanMessage) {
     interventionBilanMessage.textContent = '';
     interventionBilanMessage.classList.remove('error');
@@ -2757,13 +2825,15 @@ async function loadInterventionBilan() {
       start_time_planned,
       end_time_planned,
       fait,
+      client_id,
+      employee_id,
       duplicated_from_intervention_id
     `)
     .order('date', { ascending: true })
     .order('start_time_planned', { ascending: true });
 
   if (error) {
-    interventionBilanTableBody.innerHTML = `<tr><td colspan="6">Erreur : ${error.message || 'chargement impossible'}</td></tr>`;
+    interventionBilanTableBody.innerHTML = `<tr><td colspan="7">Erreur : ${error.message || 'chargement impossible'}</td></tr>`;
     if (interventionBilanMessage) {
       interventionBilanMessage.textContent = error.message || 'Chargement impossible.';
       interventionBilanMessage.classList.add('error');
@@ -2773,7 +2843,7 @@ async function loadInterventionBilan() {
 
   const interventions = data || [];
   if (interventions.length === 0) {
-    interventionBilanTableBody.innerHTML = '<tr><td colspan="6">Aucune intervention.</td></tr>';
+    interventionBilanTableBody.innerHTML = '<tr><td colspan="7">Aucune intervention.</td></tr>';
     return;
   }
 
@@ -2796,7 +2866,7 @@ async function loadInterventionBilan() {
       appendSummaryGroupRow(
         interventionBilanTableBody,
         month.year == null ? 'Année non renseignée' : yearKey,
-        6,
+        7,
         yearKey,
         'intervention-bilan',
         'year'
@@ -2809,7 +2879,7 @@ async function loadInterventionBilan() {
       appendSummaryGroupRow(
         interventionBilanTableBody,
         month.label || 'Mois non renseigné',
-        6,
+        7,
         monthKey,
         'intervention-bilan',
         'month'
@@ -2823,7 +2893,7 @@ async function loadInterventionBilan() {
       appendSummaryGroupRow(
         interventionBilanTableBody,
         week.label,
-        6,
+        7,
         weekKey,
         'intervention-bilan',
         'week'
@@ -2840,7 +2910,21 @@ async function loadInterventionBilan() {
     row.dataset.yearKey = yearKey;
     row.dataset.monthKey = monthKey;
     row.dataset.weekKey = weekKey;
+    row.dataset.id = intervention.id;
+    row.dataset.employeeId = intervention.employee_id || '';
+    row.dataset.date = intervention.date || '';
+    row.dataset.duplicatedFrom = intervention.duplicated_from_intervention_id || '';
+    const faitRaw = intervention.fait ?? 'en attente';
+    const isManuallyValidated = validatedInterventions.has(intervention.id);
+    const fait = isManuallyValidated ? 'validé' : faitRaw;
+    row.dataset.fait = fait;
     const duplicated = Boolean(intervention.duplicated_from_intervention_id);
+    const canEdit = !isManuallyValidated && canEditPlannedIntervention(fait);
+    const canFinalize = !isManuallyValidated && canAdminValidateOrDelete(fait);
+    const editDisabledAttr = canEdit ? '' : 'disabled';
+    const editDisabledClass = canEdit ? '' : ' disabled';
+    const finalizeDisabledAttr = canFinalize ? '' : 'disabled';
+    const finalizeDisabledClass = canFinalize ? '' : ' disabled';
     if (duplicated) row.classList.add('intervention-duplicated-row');
     row.innerHTML = `
       <td>${intervention.client_name || ''}</td>
@@ -2849,14 +2933,186 @@ async function loadInterventionBilan() {
       <td>${intervention.start_time_planned || ''}</td>
       <td>${intervention.end_time_planned || ''}</td>
       <td>
-        ${intervention.fait || 'en attente'}
+        ${fait}
         ${duplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
+      </td>
+      <td>
+        <div class="action-buttons">
+          <button class="btn btn-secondary btn-small${editDisabledClass}"
+                  data-action="edit"
+                  ${editDisabledAttr}>Modifier</button>
+          <button class="btn btn-secondary btn-small${finalizeDisabledClass}"
+                  data-action="delete"
+                  ${finalizeDisabledAttr}>Supprimer</button>
+          <button class="btn btn-primary btn-small${finalizeDisabledClass}"
+                  data-action="validate"
+                  ${finalizeDisabledAttr}>Valider</button>
+        </div>
       </td>
     `;
     interventionBilanTableBody.appendChild(row);
   });
 
   updateSummaryGroupVisibility(interventionBilanTableBody, 'intervention-bilan');
+}
+
+if (interventionBilanForm) {
+  interventionBilanForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setInterventionBilanFormMessage('');
+
+    const id = interventionBilanIdInput.value || null;
+    const client_id = interventionBilanClientSelect.value || null;
+    const employee_id = interventionBilanEmployeeSelect.value || null;
+    const date = interventionBilanDateInput.value || null;
+    const start_time_planned = interventionBilanStartTimeInput.value || null;
+    const end_time_planned = interventionBilanEndTimeInput.value || null;
+
+    if (!client_id || !employee_id || !date) {
+      setInterventionBilanFormMessage('Client, employé et date sont obligatoires.', 'error');
+      return;
+    }
+
+    try {
+      let successMessage;
+      if (id) {
+        const { error } = await supabase
+          .from('interventions')
+          .update({ client_id, employee_id, date, start_time_planned, end_time_planned })
+          .eq('id', id);
+        if (error) throw error;
+        successMessage = 'Intervention mise à jour.';
+      } else {
+        const { error } = await supabase.from('interventions').insert([
+          { client_id, employee_id, date, start_time_planned, end_time_planned, status: 'planned' },
+        ]);
+        if (error) throw error;
+        successMessage = 'Intervention ajoutée.';
+      }
+
+      resetInterventionBilanForm();
+      setInterventionBilanFormMessage(successMessage);
+      await loadInterventionBilan();
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
+    } catch (err) {
+      setInterventionBilanFormMessage(
+        err?.message ?? "Erreur lors de l'enregistrement de l'intervention.",
+        'error'
+      );
+    }
+  });
+}
+
+if (interventionBilanResetBtn) {
+  interventionBilanResetBtn.addEventListener('click', resetInterventionBilanForm);
+}
+
+if (interventionBilanTableBody) {
+  interventionBilanTableBody.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const action = target.dataset.action;
+    if (!['edit', 'delete', 'validate'].includes(action)) return;
+
+    const row = target.closest('tr');
+    const id = row?.dataset.id;
+    if (!row || !id) return;
+
+    const fait = row.dataset.fait || 'en attente';
+    if (action === 'edit' && !canEditPlannedIntervention(fait)) {
+      setInterventionBilanFormMessage(
+        "Cette intervention a déjà un historique : seul Valider ou Supprimer reste possible si elle n'est pas faite.",
+        'error'
+      );
+      return;
+    }
+    if ((action === 'delete' || action === 'validate') && !canAdminValidateOrDelete(fait)) {
+      setInterventionBilanFormMessage('Cette intervention est déjà faite ou validée.', 'error');
+      return;
+    }
+
+    if (action === 'edit') {
+      await loadInterventionBilanLookups();
+      const { data, error } = await supabase
+        .from('interventions')
+        .select('id, client_id, employee_id, date, start_time_planned, end_time_planned')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !data) {
+        setInterventionBilanFormMessage(
+          "Impossible de charger l'intervention pour modification.",
+          'error'
+        );
+        return;
+      }
+
+      interventionBilanIdInput.value = data.id;
+      interventionBilanClientSelect.value = data.client_id || '';
+      interventionBilanEmployeeSelect.value = data.employee_id || '';
+      interventionBilanDateInput.value = data.date || '';
+      interventionBilanStartTimeInput.value = data.start_time_planned || '';
+      interventionBilanEndTimeInput.value = data.end_time_planned || '';
+      setInterventionBilanFormMessage("Modification de l'intervention.");
+      interventionBilanForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (action === 'delete') {
+      const duplicatedFrom = row.dataset.duplicatedFrom || '';
+      const targetDate = row.dataset.date || '';
+      const employeeId = row.dataset.employeeId || '';
+
+      if (duplicatedFrom && targetDate && employeeId) {
+        const { error: skipError } = await supabase
+          .from('intervention_duplication_skips')
+          .upsert(
+            [{ source_intervention_id: duplicatedFrom, employee_id: employeeId, target_date: targetDate }],
+            { onConflict: 'source_intervention_id,employee_id,target_date' }
+          );
+        if (skipError) {
+          setInterventionBilanFormMessage(
+            skipError.message ?? "Impossible d'enregistrer la suppression de la duplication.",
+            'error'
+          );
+          return;
+        }
+      }
+
+      const { error } = await supabase.from('interventions').delete().eq('id', id);
+      if (error) {
+        setInterventionBilanFormMessage(error.message ?? 'Suppression impossible.', 'error');
+        return;
+      }
+      if (interventionBilanIdInput.value === id) resetInterventionBilanForm();
+      setInterventionBilanFormMessage('Intervention supprimée.');
+      await loadInterventionBilan();
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('interventions')
+        .update({ status: 'done', saved: true, completed_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+
+      validatedInterventions.add(id);
+      setInterventionBilanFormMessage('Intervention validée manuellement.');
+      await loadInterventionBilan();
+      syncNeededClientDistances().catch((err) => {
+        console.warn('Synchronisation automatique des distances impossible', err);
+      });
+    } catch (err) {
+      setInterventionBilanFormMessage(
+        err?.message ?? "Erreur inconnue lors de la validation de l'intervention.",
+        'error'
+      );
+    }
+  });
 }
 
 async function loadEmployeeMonthSummary() {
