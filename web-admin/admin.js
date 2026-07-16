@@ -1176,6 +1176,7 @@ async function loadInterventions() {
       return {
         weekKey: 'no-date',
         label: 'Sans date',
+        groupDate: null,
       };
     }
     const d = new Date(dateStr + 'T00:00:00');
@@ -1183,6 +1184,7 @@ async function loadInterventions() {
       return {
         weekKey: 'no-date',
         label: 'Sans date',
+        groupDate: null,
       };
     }
     const day = d.getDay(); // 0 = dimanche, 1 = lundi, ...
@@ -1208,13 +1210,15 @@ async function loadInterventions() {
     return {
       weekKey: key,
       label,
+      groupDate: key,
     };
   }
 
   interventions.forEach((intv) => {
     const dateStr = intv.date ?? null;
     const weekInfo = getWeekInfo(dateStr);
-    const monthParts = getMonthParts(dateStr);
+    // Une semaine qui chevauche deux mois reste rattachée au mois de son lundi.
+    const monthParts = getMonthParts(weekInfo.groupDate || dateStr);
     const yearKey = monthParts.year == null ? 'annee-inconnue' : String(monthParts.year);
     const yearLabel = monthParts.year == null ? 'Année non renseignée' : yearKey;
     const monthKey = monthParts.key || 'mois-inconnu';
