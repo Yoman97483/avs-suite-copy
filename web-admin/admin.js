@@ -291,6 +291,8 @@ const interventionEndTimeInput = document.getElementById('intervention-end-time'
 const interventionIsWeeklyInput = null; // plus d’hebdomadaire
 const interventionResetBtn = document.getElementById('intervention-reset-btn');
 const interventionFormMessage = document.getElementById('intervention-form-message');
+const interventionBilanMessage = document.getElementById('intervention-bilan-message');
+const interventionBilanTableBody = document.getElementById('intervention-bilan-table-body');
 
 // Emploi du temps – éléments du DOM
 const scheduleEmployeeSelect = document.getElementById('schedule-employee-id');
@@ -562,6 +564,8 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
       loadInterventionsLookups();
       loadInterventions();
       startAutoRefreshInterventions();
+    } else if (tabId === 'intervention-bilan-tab') {
+      loadInterventionBilan();
     } else if (tabId === 'schedule-tab') {
       loadScheduleLookups().then(() => {
         setScheduleCurrentWeekIfEmpty();
@@ -2619,6 +2623,8 @@ function appendSummaryGroupRow(tbody, label, colspan, groupKey, scope, type) {
 
 function updateSummaryGroupVisibility(tbody, scope) {
   const collapsedYears = new Set();
+  const collapsedMonths = new Set();
+  const collapsedWeeks = new Set();
   tbody.querySelectorAll('tr.year-group-row').forEach((row) => {
     const yearKey = row.dataset.groupKey;
     if (!yearKey) return;
@@ -2639,6 +2645,26 @@ function updateSummaryGroupVisibility(tbody, scope) {
     const hiddenByYear = collapsedYears.has(yearKey);
     const collapsed = isSummaryGroupCollapsed(scope, 'month', monthKey);
     row.classList.toggle('hidden', hiddenByYear);
+    if (collapsed) collapsedMonths.add(monthKey);
+    const button = row.querySelector('button[data-action="toggle-summary-group"]');
+    if (button) {
+      button.setAttribute('aria-expanded', String(!collapsed));
+      const icon = button.querySelector('.summary-toggle-icon');
+      if (icon) icon.textContent = collapsed ? '>' : 'v';
+    }
+  });
+
+  tbody.querySelectorAll('tr.week-group-row').forEach((row) => {
+    const yearKey = row.dataset.yearKey;
+    const monthKey = row.dataset.monthKey;
+    const weekKey = row.dataset.groupKey;
+    if (!weekKey) return;
+    const hiddenByParent =
+      (yearKey && collapsedYears.has(yearKey)) ||
+      (monthKey && collapsedMonths.has(monthKey));
+    const collapsed = isSummaryGroupCollapsed(scope, 'week', weekKey);
+    row.classList.toggle('hidden', Boolean(hiddenByParent));
+    if (collapsed) collapsedWeeks.add(weekKey);
     const button = row.querySelector('button[data-action="toggle-summary-group"]');
     if (button) {
       button.setAttribute('aria-expanded', String(!collapsed));
@@ -2650,9 +2676,11 @@ function updateSummaryGroupVisibility(tbody, scope) {
   tbody.querySelectorAll('tr.summary-detail-row').forEach((row) => {
     const yearKey = row.dataset.yearKey;
     const monthKey = row.dataset.monthKey;
+    const weekKey = row.dataset.weekKey;
     const hidden =
       (yearKey && collapsedYears.has(yearKey)) ||
-      (monthKey && isSummaryGroupCollapsed(scope, 'month', monthKey));
+      (monthKey && collapsedMonths.has(monthKey)) ||
+      (weekKey && collapsedWeeks.has(weekKey));
     row.classList.toggle('hidden', Boolean(hidden));
   });
 }
@@ -2681,6 +2709,155 @@ function setupSummaryGroupToggle(tbody, scope) {
 
 setupSummaryGroupToggle(employeeMonthSummaryTableBody, 'employee');
 setupSummaryGroupToggle(clientMonthlyBilanTableBody, 'client');
+setupSummaryGroupToggle(interventionBilanTableBody, 'intervention-bilan');
+
+function getInterventionBilanWeekInfo(dateStr) {
+  if (!dateStr) {
+    return { weekKey: 'sans-date', groupDate: null, label: 'Sans date' };
+  }
+
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return { weekKey: 'sans-date', groupDate: null, label: 'Sans date' };
+  }
+
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const weekKey = [
+    monday.getFullYear(),
+    String(monday.getMonth() + 1).padStart(2, '0'),
+    String(monday.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  return {
+    weekKey,
+    groupDate: weekKey,
+    label: `Semaine du ${monday.toLocaleDateString('fr-FR')} au ${sunday.toLocaleDateString('fr-FR')}`,
+  };
+}
+
+async function loadInterventionBilan() {
+  if (!interventionBilanTableBody) return;
+
+  interventionBilanTableBody.innerHTML = '<tr><td colspan="6">Chargement…</td></tr>';
+  if (interventionBilanMessage) {
+    interventionBilanMessage.textContent = '';
+    interventionBilanMessage.classList.remove('error');
+  }
+
+  const { data, error } = await supabase
+    .from('interventions_progress_admin')
+    .select(`
+      id,
+      date,
+      client_name,
+      employee_name,
+      start_time_planned,
+      end_time_planned,
+      fait,
+      duplicated_from_intervention_id
+    `)
+    .order('date', { ascending: true })
+    .order('start_time_planned', { ascending: true });
+
+  if (error) {
+    interventionBilanTableBody.innerHTML = `<tr><td colspan="6">Erreur : ${error.message || 'chargement impossible'}</td></tr>`;
+    if (interventionBilanMessage) {
+      interventionBilanMessage.textContent = error.message || 'Chargement impossible.';
+      interventionBilanMessage.classList.add('error');
+    }
+    return;
+  }
+
+  const interventions = data || [];
+  if (interventions.length === 0) {
+    interventionBilanTableBody.innerHTML = '<tr><td colspan="6">Aucune intervention.</td></tr>';
+    return;
+  }
+
+  interventionBilanTableBody.innerHTML = '';
+  let currentYearKey = null;
+  let currentMonthKey = null;
+  let currentWeekKey = null;
+
+  interventions.forEach((intervention) => {
+    const week = getInterventionBilanWeekInfo(intervention.date);
+    const month = getMonthParts(week.groupDate || intervention.date);
+    const yearKey = month.year == null ? 'annee-inconnue' : String(month.year);
+    const monthKey = month.key || 'mois-inconnu';
+    const weekKey = `${monthKey}:${week.weekKey}`;
+
+    if (yearKey !== currentYearKey) {
+      currentYearKey = yearKey;
+      currentMonthKey = null;
+      currentWeekKey = null;
+      appendSummaryGroupRow(
+        interventionBilanTableBody,
+        month.year == null ? 'Année non renseignée' : yearKey,
+        6,
+        yearKey,
+        'intervention-bilan',
+        'year'
+      );
+    }
+
+    if (monthKey !== currentMonthKey) {
+      currentMonthKey = monthKey;
+      currentWeekKey = null;
+      appendSummaryGroupRow(
+        interventionBilanTableBody,
+        month.label || 'Mois non renseigné',
+        6,
+        monthKey,
+        'intervention-bilan',
+        'month'
+      );
+      const monthRow = interventionBilanTableBody.lastElementChild;
+      if (monthRow) monthRow.dataset.yearKey = yearKey;
+    }
+
+    if (weekKey !== currentWeekKey) {
+      currentWeekKey = weekKey;
+      appendSummaryGroupRow(
+        interventionBilanTableBody,
+        week.label,
+        6,
+        weekKey,
+        'intervention-bilan',
+        'week'
+      );
+      const weekRow = interventionBilanTableBody.lastElementChild;
+      if (weekRow) {
+        weekRow.dataset.yearKey = yearKey;
+        weekRow.dataset.monthKey = monthKey;
+      }
+    }
+
+    const row = document.createElement('tr');
+    row.classList.add('summary-detail-row');
+    row.dataset.yearKey = yearKey;
+    row.dataset.monthKey = monthKey;
+    row.dataset.weekKey = weekKey;
+    const duplicated = Boolean(intervention.duplicated_from_intervention_id);
+    if (duplicated) row.classList.add('intervention-duplicated-row');
+    row.innerHTML = `
+      <td>${intervention.client_name || ''}</td>
+      <td>${intervention.employee_name || ''}</td>
+      <td>${intervention.date ? new Date(`${intervention.date}T00:00:00`).toLocaleDateString('fr-FR') : ''}</td>
+      <td>${intervention.start_time_planned || ''}</td>
+      <td>${intervention.end_time_planned || ''}</td>
+      <td>
+        ${intervention.fait || 'en attente'}
+        ${duplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
+      </td>
+    `;
+    interventionBilanTableBody.appendChild(row);
+  });
+
+  updateSummaryGroupVisibility(interventionBilanTableBody, 'intervention-bilan');
+}
 
 async function loadEmployeeMonthSummary() {
   if (!employeeMonthSummaryTableBody) return;
