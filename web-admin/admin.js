@@ -1123,6 +1123,15 @@ function canEditPlannedIntervention(value) {
   return normalizeInterventionState(value) === 'en attente';
 }
 
+function getInterventionDisplayStatus(businessStatus, actualStart, actualEnd) {
+  const state = normalizeInterventionState(businessStatus);
+  if (state === 'fait' || state === 'validé' || state === 'valide') {
+    return businessStatus;
+  }
+  if (actualStart && !actualEnd) return 'en cours';
+  return businessStatus || 'en attente';
+}
+
 async function loadInterventionsLookups() {
   if (!interventionClientSelect || !interventionEmployeeSelect) return;
 
@@ -1177,6 +1186,8 @@ async function loadInterventions() {
       employee_name,
       start_time_planned,
       end_time_planned,
+      actual_start,
+      actual_end,
       fait,
       client_id,
       employee_id,
@@ -1295,6 +1306,9 @@ async function loadInterventions() {
     const faitRaw = intv.fait ?? 'en attente';
     const isManuallyValidated = validatedInterventions.has(intv.id);
     const fait = isManuallyValidated ? 'validé' : faitRaw;
+    const displayStatus = isManuallyValidated
+      ? 'validé'
+      : getInterventionDisplayStatus(fait, intv.actual_start, intv.actual_end);
     const isDuplicated = Boolean(intv.duplicated_from_intervention_id);
 
     const canEdit = !isManuallyValidated && canEditPlannedIntervention(fait);
@@ -1333,7 +1347,7 @@ async function loadInterventions() {
       <td>${startStr}</td>
       <td>${endStr}</td>
       <td>
-        ${fait}
+        ${displayStatus}
         ${isDuplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
       </td>
       <td>
@@ -2824,6 +2838,8 @@ async function loadInterventionBilan() {
       employee_name,
       start_time_planned,
       end_time_planned,
+      actual_start,
+      actual_end,
       fait,
       client_id,
       employee_id,
@@ -2917,6 +2933,13 @@ async function loadInterventionBilan() {
     const faitRaw = intervention.fait ?? 'en attente';
     const isManuallyValidated = validatedInterventions.has(intervention.id);
     const fait = isManuallyValidated ? 'validé' : faitRaw;
+    const displayStatus = isManuallyValidated
+      ? 'validé'
+      : getInterventionDisplayStatus(
+          fait,
+          intervention.actual_start,
+          intervention.actual_end
+        );
     row.dataset.fait = fait;
     const duplicated = Boolean(intervention.duplicated_from_intervention_id);
     const canEdit = !isManuallyValidated && canEditPlannedIntervention(fait);
@@ -2933,7 +2956,7 @@ async function loadInterventionBilan() {
       <td>${intervention.start_time_planned || ''}</td>
       <td>${intervention.end_time_planned || ''}</td>
       <td>
-        ${fait}
+        ${displayStatus}
         ${duplicated ? '<span class="schedule-duplicate-label">dupliquée</span>' : ''}
       </td>
       <td>
