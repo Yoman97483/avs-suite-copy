@@ -561,6 +561,8 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 
     // On coupe les auto-refresh
     stopAutoRefreshInterventions();
+    stopAutoRefreshSchedule();
+    stopAutoRefreshInterventionBilan();
     stopAutoRefreshPointages();
 
     // Puis on charge l’onglet sélectionné
@@ -576,11 +578,13 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     } else if (tabId === 'intervention-bilan-tab') {
       loadInterventionBilanLookups();
       loadInterventionBilan();
+      startAutoRefreshInterventionBilan();
     } else if (tabId === 'schedule-tab') {
       loadScheduleLookups().then(() => {
         setScheduleCurrentWeekIfEmpty();
         loadEmployeeSchedule();
       });
+      startAutoRefreshSchedule();
     } else if (tabId === 'pointages-tab') {
       loadPointages();
       startAutoRefreshPointages();
@@ -1944,10 +1948,13 @@ function renderScheduleRows(interventions, monday) {
 
     dayRows.forEach((intv, rowIndex) => {
       const tr = document.createElement('tr');
-      const businessStatus = intv.fait || 'en attente';
-      const statusLabel = intv.actual_start && !intv.actual_end
-        ? 'en cours'
-        : businessStatus;
+      const isManuallyValidated = validatedInterventions.has(intv.id);
+      const businessStatus = isManuallyValidated ? 'validé' : intv.fait || 'en attente';
+      const statusLabel = getInterventionDisplayStatus(
+        businessStatus,
+        intv.actual_start,
+        intv.actual_end
+      );
       tr.dataset.id = intv.id;
       tr.dataset.fait = businessStatus;
       tr.dataset.employeeId = intv.employee_id || '';
@@ -2259,11 +2266,6 @@ if (scheduleTableBody) {
       await loadEmployeeSchedule();
       await loadInterventions();
     } else if (action === 'schedule-validate') {
-      const confirmed = window.confirm(
-        'Valider cette intervention côté administrateur ?'
-      );
-      if (!confirmed) return;
-
       const nowIso = new Date().toISOString();
       const { error } = await supabase
         .from('interventions')
@@ -3621,6 +3623,8 @@ async function loadPointages() {
 // --------- Auto-refresh ---------
 
 let interventionsInterval = null;
+let scheduleInterval = null;
+let interventionBilanInterval = null;
 let pointagesInterval = null;
 
 function startAutoRefreshInterventions() {
@@ -3630,6 +3634,24 @@ function startAutoRefreshInterventions() {
 
 function stopAutoRefreshInterventions() {
   if (interventionsInterval) clearInterval(interventionsInterval);
+}
+
+function startAutoRefreshSchedule() {
+  if (scheduleInterval) clearInterval(scheduleInterval);
+  scheduleInterval = setInterval(loadEmployeeSchedule, 10000);
+}
+
+function stopAutoRefreshSchedule() {
+  if (scheduleInterval) clearInterval(scheduleInterval);
+}
+
+function startAutoRefreshInterventionBilan() {
+  if (interventionBilanInterval) clearInterval(interventionBilanInterval);
+  interventionBilanInterval = setInterval(loadInterventionBilan, 10000);
+}
+
+function stopAutoRefreshInterventionBilan() {
+  if (interventionBilanInterval) clearInterval(interventionBilanInterval);
 }
 
 function startAutoRefreshPointages() {
