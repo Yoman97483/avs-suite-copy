@@ -23,7 +23,7 @@ type Intervention = {
   start_time_planned: string | null;
   end_time_planned: string | null;
   status: string | null;
-  notes: string | null;
+  fait: string | null;
   saved: boolean | null;
 };
 
@@ -77,19 +77,38 @@ export default function TabOneScreen() {
   const [pointagesMap, setPointagesMap] = useState<PointagesMap>({});
   const [clientsMap, setClientsMap] = useState<Record<string, Client>>({});
 
-// Rafraîchissement automatique régulier des interventions, pointages et clients
-useEffect(() => {
-  if (!userId) return;
+  useEffect(() => {
+    if (!userId) return;
 
-  const interval = setInterval(() => {
-    loadInterventions(userId).then((loadedInterventions) => {
-      loadClients(loadedInterventions);
-    });
-    loadPointages(userId);
-  }, 30000); // toutes les 30 secondes
+    const refreshInterventions = () => {
+      loadInterventions(userId).then((loadedInterventions) => {
+        loadClients(loadedInterventions);
+      });
+    };
 
-  return () => clearInterval(interval);
-}, [userId]);
+    const channel = supabase
+      .channel(`employee-interventions-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'interventions',
+          filter: `employee_id=eq.${userId}`,
+        },
+        refreshInterventions
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'interventions' },
+        refreshInterventions
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -198,9 +217,9 @@ async function loadInterventions(employeeId: string) {
     try {
       setLoadingInterventions(true);
       const { data, error } = await supabase
-        .from('interventions')
+        .from('interventions_progress_admin')
         .select(
-          'id, client_id, date, start_time_planned, end_time_planned, status, notes, saved'
+          'id, client_id, date, start_time_planned, end_time_planned, status, fait, saved'
         )
         .eq('employee_id', employeeId)
         .gte('date', getTwoWeekRangeFromCurrentWeek().from)
@@ -376,6 +395,10 @@ async function loadInterventions(employeeId: string) {
         }
 
         await loadPointages(userId);
+        if (type === 'end') {
+          const loadedInterventions = await loadInterventions(userId);
+          await loadClients(loadedInterventions);
+        }
       }
     } catch (err: any) {
       setErrorMessage(err?.message ?? "Erreur lors de l’enregistrement du pointage.");
@@ -422,6 +445,23 @@ async function loadInterventions(employeeId: string) {
   function formatTime(time: string | null) {
     if (!time) return '';
     return time.slice(0, 5);
+  }
+
+  function getCompletedStatusLabel(value: string | null) {
+    const status = (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (status === 'fait') return 'fait';
+    if (status.includes('position') && status.includes('temps')) {
+      return 'pb position+temps';
+    }
+    if (status.includes('position')) return 'pb position';
+    if (status.includes('temps')) return 'pb temps';
+    return null;
   }
 
   function formatDateTime(ts?: string) {
@@ -584,6 +624,9 @@ async function loadInterventions(employeeId: string) {
                     ? clientsMap[intervention.client_id]
                     : undefined;
                   const isValidatedByAdmin = intervention.saved === true;
+                  const completedStatus = pointages.end
+                    ? getCompletedStatusLabel(intervention.fait)
+                    : null;
 
                   return (
                     <ThemedView
@@ -656,6 +699,10 @@ async function loadInterventions(employeeId: string) {
                         {isValidatedByAdmin ? (
                           <ThemedText style={styles.finiText}>
                             Intervention validée
+                          </ThemedText>
+                        ) : completedStatus ? (
+                          <ThemedText style={styles.finiText}>
+                            {completedStatus}
                           </ThemedText>
                         ) : null}
                       </View>
