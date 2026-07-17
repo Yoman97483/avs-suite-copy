@@ -103,6 +103,21 @@ export default function TabOneScreen() {
         { event: 'DELETE', schema: 'public', table: 'interventions' },
         refreshInterventions
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'interventions',
+          filter: `employee_id=eq.${userId}`,
+        },
+        (payload) => {
+          const updatedIntervention = payload.new as { saved?: boolean };
+          if (updatedIntervention.saved === true) {
+            refreshInterventions();
+          }
+        }
+      )
       .subscribe();
 
     return () => {
@@ -698,7 +713,7 @@ async function loadInterventions(employeeId: string) {
 
                         {isValidatedByAdmin ? (
                           <ThemedText style={styles.finiText}>
-                            Intervention validée
+                            validé
                           </ThemedText>
                         ) : completedStatus ? (
                           <ThemedText style={styles.finiText}>

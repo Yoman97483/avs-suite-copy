@@ -22,7 +22,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.pierre974.avsapp",
-      "versionCode": 14
+      "versionCode": 15
     },
     "web": {
       "output": "static",
