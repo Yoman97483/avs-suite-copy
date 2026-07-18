@@ -1,3 +1,4 @@
+-- Queue one alert after an employee ends an intervention with a detected problem.
 create table if not exists private.intervention_problem_email_notifications (
   intervention_id uuid primary key references public.interventions(id) on delete cascade,
   pointage_id uuid not null unique references public.pointages(id) on delete cascade,
