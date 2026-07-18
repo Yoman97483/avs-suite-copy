@@ -2307,7 +2307,7 @@ if (scheduleTableBody) {
       if (scheduleInterventionIdInput?.value === id) {
         resetScheduleForm();
       }
-      setScheduleFormMessage('Intervention supprimée du planning.');
+      setScheduleFormMessage('');
       await loadEmployeeSchedule();
       await loadInterventions();
     } else if (action === 'schedule-validate') {
