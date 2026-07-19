@@ -198,32 +198,24 @@ function getTwoWeekRangeFromCurrentWeek() {
   const today = new Date();
   const day = today.getDay(); // 0 = dimanche, 1 = lundi, ...
 
-  // On calcule le lundi de la semaine "courante" (celle qui contient aujourd'hui)
+  // La semaine courante reste affichee jusqu'au dimanche soir.
   const startOfWeek = new Date(today);
   const diffToMonday = (day + 6) % 7; // 0 si lundi, 6 si dimanche
   startOfWeek.setDate(today.getDate() - diffToMonday);
   startOfWeek.setHours(0, 0, 0, 0);
 
-  let fromDate: Date;
+  const toDate = new Date(startOfWeek);
+  toDate.setDate(startOfWeek.getDate() + 14);
 
-  if (day === 0) {
-    // DIMANCHE :
-    // La semaine qui se termine (semaine 1) doit disparaître de l'application.
-    // On commence donc l'affichage à la semaine suivante (semaine 2),
-    // et on montre Semaine 2 + Semaine 3.
-    fromDate = new Date(startOfWeek);
-    fromDate.setDate(fromDate.getDate() + 7); // lundi de la semaine 2
-  } else {
-    // LUNDI → SAMEDI :
-    // On affiche la semaine courante (semaine 1) + la suivante (semaine 2).
-    fromDate = startOfWeek;
-  }
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const dateOfMonth = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${dateOfMonth}`;
+  };
 
-  const toDate = new Date(fromDate);
-  toDate.setDate(fromDate.getDate() + 14); // 2 semaines à partir de "from"
-
-  const from = fromDate.toISOString().slice(0, 10);
-  const to = toDate.toISOString().slice(0, 10);
+  const from = formatLocalDate(startOfWeek);
+  const to = formatLocalDate(toDate);
 
   return { from, to };
 }
