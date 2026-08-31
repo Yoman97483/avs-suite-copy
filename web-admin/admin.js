@@ -685,6 +685,7 @@ async function loadEmployees() {
   const { data, error } = await supabase
     .from('employees')
     .select('id, first_name, last_name, address, phone, email, created_at')
+    .eq('hidden_from_admin_list', false)
     .order('last_name', { ascending: true })
     .order('first_name', { ascending: true });
 
@@ -722,7 +723,7 @@ async function loadEmployees() {
         <div class="action-buttons">
           <button class="btn btn-secondary btn-small" data-action="edit">Modifier</button>
           <button class="btn btn-secondary btn-small" data-action="password-reset">Envoyer reset mot de passe</button>
-          <button class="btn btn-secondary btn-small" data-action="delete">Supprimer</button>
+          <button class="btn btn-secondary btn-small" data-action="delete" title="Masquer uniquement dans cette liste, sans supprimer les données">Supprimer</button>
         </div>
       </td>
     `;
@@ -879,27 +880,12 @@ if (employeesTableBody) {
       );
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (action === 'delete') {
-      const { count, error: countError } = await supabase
-        .from('interventions')
-        .select('id', { count: 'exact', head: true })
-        .eq('employee_id', id);
-
-      if (countError) {
-        alert(countError.message ?? 'Impossible de vérifier les interventions.');
-        return;
-      }
-
-      if ((count ?? 0) > 0) {
-        alert(
-          "Impossible de supprimer cet employé : il est lié à des interventions déjà créées."
-        );
-        return;
-      }
-
       const { error } = await supabase
         .from('employees')
-        .delete()
-        .eq('id', id);
+        .update({ hidden_from_admin_list: true })
+        .eq('id', id)
+        .select('id')
+        .single();
       if (error) {
         alert(error.message ?? 'Suppression impossible.');
         return;
@@ -943,6 +929,7 @@ async function loadClients() {
   const { data, error } = await supabase
     .from('clients')
     .select('id, name, address, phone, notes, created_at')
+    .eq('hidden_from_admin_list', false)
     .order('name', { ascending: true });
 
   if (error) {
@@ -977,7 +964,7 @@ async function loadClients() {
       <td>
         <div class="action-buttons">
           <button class="btn btn-secondary btn-small" data-action="edit">Modifier</button>
-          <button class="btn btn-secondary btn-small" data-action="delete">Supprimer</button>
+          <button class="btn btn-secondary btn-small" data-action="delete" title="Masquer uniquement dans cette liste, sans supprimer les données">Supprimer</button>
         </div>
       </td>
     `;
@@ -1103,8 +1090,10 @@ if (clientsTableBody) {
     } else if (action === 'delete') {
       const { error } = await supabase
         .from('clients')
-        .delete()
-        .eq('id', id);
+        .update({ hidden_from_admin_list: true })
+        .eq('id', id)
+        .select('id')
+        .single();
       if (error) {
         alert(error.message ?? 'Suppression impossible.');
         return;
