@@ -1776,6 +1776,7 @@ async function loadScheduleLookups() {
   const { data: clients, error: clientsError } = await supabase
     .from('clients')
     .select('id, name')
+    .eq('hidden_from_admin_list', false)
     .order('name', { ascending: true });
 
   if (clientsError) {
@@ -2812,7 +2813,11 @@ async function loadInterventionBilanLookups() {
   const selectedEmployee = interventionBilanEmployeeSelect.value;
   const [{ data: clients, error: clientsError }, { data: employees, error: employeesError }] =
     await Promise.all([
-      supabase.from('clients').select('id, name').order('name', { ascending: true }),
+      supabase
+        .from('clients')
+        .select('id, name')
+        .eq('hidden_from_admin_list', false)
+        .order('name', { ascending: true }),
       supabase
         .from('employees')
         .select('id, first_name, last_name')
