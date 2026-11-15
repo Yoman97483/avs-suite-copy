@@ -1745,6 +1745,7 @@ async function loadScheduleLookups() {
   const { data: employees, error: employeesError } = await supabase
     .from('employees')
     .select('id, first_name, last_name')
+    .eq('hidden_from_admin_list', false)
     .order('last_name', { ascending: true })
     .order('first_name', { ascending: true });
 
@@ -2815,6 +2816,7 @@ async function loadInterventionBilanLookups() {
       supabase
         .from('employees')
         .select('id, first_name, last_name')
+        .eq('hidden_from_admin_list', false)
         .order('last_name', { ascending: true })
         .order('first_name', { ascending: true }),
     ]);

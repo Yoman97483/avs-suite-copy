@@ -79,9 +79,19 @@ for (const [table, singular, nextSection] of [
   }
 }
 
-test('visibility filtering is limited to the two management lists', () => {
-  assert.equal((source.match(/\.eq\('hidden_from_admin_list', false\)/g) || []).length, 2);
-  assert.equal((source.match(/hidden_from_admin_list/g) || []).length, 4);
+test('visibility filtering is limited to management lists and requested employee selectors', () => {
+  assert.equal((source.match(/\.eq\('hidden_from_admin_list', false\)/g) || []).length, 4);
+  assert.equal((source.match(/hidden_from_admin_list/g) || []).length, 6);
+  const scheduleLookups = section(
+    'async function loadScheduleLookups()',
+    'async function duplicateCurrentWeekToNextWeek'
+  );
+  const interventionLookups = section(
+    'async function loadInterventionBilanLookups()',
+    'async function loadInterventionBilan()'
+  );
+  assert.match(scheduleLookups, /from\('employees'\)[\s\S]*?\.eq\('hidden_from_admin_list', false\)/);
+  assert.match(interventionLookups, /from\('employees'\)[\s\S]*?\.eq\('hidden_from_admin_list', false\)/);
 });
 
 test('employee creation does not automatically request a password reset', () => {
