@@ -792,21 +792,9 @@ if (employeeForm) {
           throw insertError;
         }
 
-        const { error: resetError } =
-          await supabaseAuthAdmin.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}${window.location.pathname}`,
-          });
-
-        if (resetError) {
-          setEmployeeFormMessage(
-            `Employé créé, mais l'email de définition du mot de passe n'a pas pu être envoyé : ${resetError.message}`,
-            'error'
-          );
-        } else {
-          setEmployeeFormMessage(
-            `Employé créé. Un email pour définir son mot de passe a été envoyé à ${email}.`
-          );
-        }
+        setEmployeeFormMessage(
+          "Employé créé. Utilisez le bouton Envoyer reset mot de passe pour lui transmettre un lien."
+        );
       }
 
       await loadEmployees();

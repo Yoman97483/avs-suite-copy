@@ -83,3 +83,17 @@ test('visibility filtering is limited to the two management lists', () => {
   assert.equal((source.match(/\.eq\('hidden_from_admin_list', false\)/g) || []).length, 2);
   assert.equal((source.match(/hidden_from_admin_list/g) || []).length, 4);
 });
+
+test('employee creation does not automatically request a password reset', () => {
+  const creation = section('if (employeeForm)', 'if (employeeResetBtn)');
+  assert.doesNotMatch(creation, /resetPasswordForEmail/);
+  assert.match(
+    creation,
+    /Utilisez le bouton Envoyer reset mot de passe/
+  );
+});
+
+test('password reset is requested only by the employee list button', () => {
+  const listActions = section('if (employeesTableBody)', '// --------- Gestion Clients');
+  assert.equal((listActions.match(/resetPasswordForEmail/g) || []).length, 1);
+});
