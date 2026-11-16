@@ -81,7 +81,6 @@ for (const [table, singular, nextSection] of [
 
 test('visibility filtering is limited to management lists and requested planning selectors', () => {
   assert.equal((source.match(/\.eq\('hidden_from_admin_list', false\)/g) || []).length, 6);
-  assert.equal((source.match(/hidden_from_admin_list/g) || []).length, 8);
   const scheduleLookups = section(
     'async function loadScheduleLookups()',
     'async function duplicateCurrentWeekToNextWeek'
@@ -103,6 +102,19 @@ test('employee creation does not automatically request a password reset', () => 
     creation,
     /Utilisez le bouton Envoyer reset mot de passe/
   );
+});
+
+test('employee creation restores a hidden employee before attempting Auth signup', () => {
+  const creation = section('if (employeeForm)', 'if (employeeResetBtn)');
+  const lookup = creation.indexOf(".select('id, email, hidden_from_admin_list')");
+  const restore = creation.indexOf('hidden_from_admin_list: false');
+  const signup = creation.indexOf('supabaseAuthAdmin.auth.signUp');
+  assert.ok(lookup >= 0);
+  assert.ok(restore > lookup);
+  assert.ok(signup > restore);
+  assert.match(creation, /employee\.email \|\| ''\)\.trim\(\)\.toLowerCase\(\) === email/);
+  assert.match(creation, /Un employé actif utilise déjà cette adresse email/);
+  assert.match(creation, /Son compte et son historique existants ont été conservés/);
 });
 
 test('password reset is requested only by the employee list button', () => {

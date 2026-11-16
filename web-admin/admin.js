@@ -741,7 +741,7 @@ if (employeeForm) {
     const last_name = employeeLastNameInput.value.trim();
     const address = employeeAddressInput.value.trim() || null;
     const phone = employeePhoneInput.value.trim() || null;
-    const email = employeeEmailInput.value.trim() || null;
+    const email = employeeEmailInput.value.trim().toLowerCase() || null;
 
     if (!first_name || !last_name) {
       setEmployeeFormMessage('Prénom et nom sont obligatoires.', 'error');
@@ -765,36 +765,82 @@ if (employeeForm) {
         if (error) throw error;
         setEmployeeFormMessage('Employé mis à jour.');
       } else {
-        const { data: signUpData, error: signUpError } =
-          await supabaseAuthAdmin.auth.signUp({
-            email,
-            password: generateTemporaryPassword(),
-          });
+        const { data: matchingEmployees, error: lookupError } = await supabase
+          .from('employees')
+          .select('id, email, hidden_from_admin_list')
+          .ilike('email', email)
+          .limit(10);
 
-        if (signUpError || !signUpData.user) {
-          throw signUpError || new Error("Création de l'utilisateur impossible.");
-        }
+        if (lookupError) throw lookupError;
 
-        const userId = signUpData.user.id;
-
-        const { error: insertError } = await supabase.from('employees').insert([
-          {
-            id: userId,
-            first_name,
-            last_name,
-            address,
-            phone,
-            email,
-          },
-        ]);
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        setEmployeeFormMessage(
-          "Employé créé. Utilisez le bouton Envoyer reset mot de passe pour lui transmettre un lien."
+        const exactMatches = (matchingEmployees || []).filter(
+          (employee) => (employee.email || '').trim().toLowerCase() === email
         );
+
+        if (exactMatches.length > 1) {
+          throw new Error(
+            'Plusieurs fiches utilisent cette adresse email. Contactez le support avant de continuer.'
+          );
+        }
+
+        const existingEmployee = exactMatches[0] || null;
+
+        if (existingEmployee && !existingEmployee.hidden_from_admin_list) {
+          throw new Error('Un employé actif utilise déjà cette adresse email.');
+        }
+
+        if (existingEmployee) {
+          const { error: restoreError } = await supabase
+            .from('employees')
+            .update({
+              first_name,
+              last_name,
+              address,
+              phone,
+              email,
+              hidden_from_admin_list: false,
+            })
+            .eq('id', existingEmployee.id)
+            .select('id')
+            .single();
+
+          if (restoreError) throw restoreError;
+
+          setEmployeeFormMessage(
+            "Employé réactivé. Son compte et son historique existants ont été conservés. Utilisez le bouton Envoyer reset mot de passe si nécessaire."
+          );
+        } else {
+          const { data: signUpData, error: signUpError } =
+            await supabaseAuthAdmin.auth.signUp({
+              email,
+              password: generateTemporaryPassword(),
+            });
+
+          if (signUpError || !signUpData.user) {
+            throw signUpError || new Error("Création de l'utilisateur impossible.");
+          }
+
+          const userId = signUpData.user.id;
+
+          const { error: insertError } = await supabase.from('employees').insert([
+            {
+              id: userId,
+              first_name,
+              last_name,
+              address,
+              phone,
+              email,
+            },
+          ]);
+
+          if (insertError) {
+            throw insertError;
+          }
+
+          setEmployeeFormMessage(
+            "Employé créé. Utilisez le bouton Envoyer reset mot de passe pour lui transmettre un lien."
+          );
+        }
       }
 
       await loadEmployees();
