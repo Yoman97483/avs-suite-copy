@@ -420,7 +420,9 @@ function showPasswordReset(message = '', isError = false) {
   adminSection.classList.add('hidden');
   logoutBtn.classList.add('hidden');
   adminEmail.textContent = '';
-  if (passwordResetTitle) passwordResetTitle.textContent = 'Réinitialisation du mot de passe';
+  if (passwordResetTitle) {
+    passwordResetTitle.textContent = 'Création ou modification du mot de passe';
+  }
   passwordResetHint?.classList.remove('hidden');
   passwordResetForm?.classList.remove('hidden');
   passwordResetSuccess?.classList.add('hidden');
