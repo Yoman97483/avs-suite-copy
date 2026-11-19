@@ -259,6 +259,9 @@ async function syncNeededClientDistances(options = {}) {
 // Sections / login
 const passwordResetSection = document.getElementById('password-reset-section');
 const passwordResetForm = document.getElementById('password-reset-form');
+const passwordResetTitle = document.getElementById('password-reset-title');
+const passwordResetHint = document.getElementById('password-reset-hint');
+const passwordResetSuccess = document.getElementById('password-reset-success');
 const newPasswordInput = document.getElementById('new-password-input');
 const confirmPasswordInput = document.getElementById('confirm-password-input');
 const passwordResetMessage = document.getElementById('password-reset-message');
@@ -417,6 +420,10 @@ function showPasswordReset(message = '', isError = false) {
   adminSection.classList.add('hidden');
   logoutBtn.classList.add('hidden');
   adminEmail.textContent = '';
+  if (passwordResetTitle) passwordResetTitle.textContent = 'Réinitialisation du mot de passe';
+  passwordResetHint?.classList.remove('hidden');
+  passwordResetForm?.classList.remove('hidden');
+  passwordResetSuccess?.classList.add('hidden');
 
   if (passwordResetMessage) {
     passwordResetMessage.textContent = message;
@@ -424,6 +431,14 @@ function showPasswordReset(message = '', isError = false) {
     passwordResetMessage.classList.toggle('error', isError);
     passwordResetMessage.classList.toggle('success', !!message && !isError);
   }
+}
+
+function showPasswordResetSuccess() {
+  showPasswordReset();
+  if (passwordResetTitle) passwordResetTitle.textContent = 'Mot de passe enregistré';
+  passwordResetHint?.classList.add('hidden');
+  passwordResetForm?.classList.add('hidden');
+  passwordResetSuccess?.classList.remove('hidden');
 }
 
 function showLogin() {
@@ -537,10 +552,7 @@ if (passwordResetForm) {
 
     window.history.replaceState({}, document.title, window.location.pathname);
     await supabase.auth.signOut();
-    showLogin();
-    loginError.textContent = 'Mot de passe modifié. Vous pouvez maintenant vous connecter.';
-    loginError.classList.remove('hidden', 'error');
-    loginError.classList.add('success');
+    showPasswordResetSuccess();
   });
 }
 

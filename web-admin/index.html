@@ -15,8 +15,8 @@
 
     <main class="container">
       <section id="password-reset-section" class="hidden">
-        <h2>Réinitialisation du mot de passe</h2>
-        <p class="hint">
+        <h2 id="password-reset-title">Réinitialisation du mot de passe</h2>
+        <p id="password-reset-hint" class="hint">
           Saisissez un nouveau mot de passe pour terminer la réinitialisation.
         </p>
         <form id="password-reset-form" class="card">
@@ -43,6 +43,11 @@
           <button type="submit" class="btn btn-primary">Changer le mot de passe</button>
           <p id="password-reset-message" class="message hidden"></p>
         </form>
+        <div id="password-reset-success" class="card hidden">
+          <p class="message success">
+            Votre mot de passe de l'application AVS a été créé ou modifié avec succès. Vous pouvez maintenant fermer cette page.
+          </p>
+        </div>
       </section>
 
       <section id="login-section">
