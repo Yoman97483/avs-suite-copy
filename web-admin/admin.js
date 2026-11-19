@@ -261,6 +261,8 @@ const passwordResetSection = document.getElementById('password-reset-section');
 const passwordResetForm = document.getElementById('password-reset-form');
 const passwordResetTitle = document.getElementById('password-reset-title');
 const passwordResetHint = document.getElementById('password-reset-hint');
+const passwordResetError = document.getElementById('password-reset-error');
+const passwordResetErrorMessage = document.getElementById('password-reset-error-message');
 const passwordResetSuccess = document.getElementById('password-reset-success');
 const newPasswordInput = document.getElementById('new-password-input');
 const confirmPasswordInput = document.getElementById('confirm-password-input');
@@ -425,6 +427,7 @@ function showPasswordReset(message = '', isError = false) {
   }
   passwordResetHint?.classList.remove('hidden');
   passwordResetForm?.classList.remove('hidden');
+  passwordResetError?.classList.add('hidden');
   passwordResetSuccess?.classList.add('hidden');
 
   if (passwordResetMessage) {
@@ -433,6 +436,14 @@ function showPasswordReset(message = '', isError = false) {
     passwordResetMessage.classList.toggle('error', isError);
     passwordResetMessage.classList.toggle('success', !!message && !isError);
   }
+}
+
+function showPasswordResetUnavailable(message) {
+  showPasswordReset();
+  passwordResetHint?.classList.add('hidden');
+  passwordResetForm?.classList.add('hidden');
+  if (passwordResetErrorMessage) passwordResetErrorMessage.textContent = message;
+  passwordResetError?.classList.remove('hidden');
 }
 
 function showPasswordResetSuccess() {
@@ -484,14 +495,18 @@ function showAdmin(user) {
 async function restoreSession() {
   if (isPasswordRecoveryRedirect()) {
     const params = getAuthHashParams();
-    const errorDescription = params.get('error_description');
 
     if (params.get('error')) {
-      showPasswordReset(
-        errorDescription
-          ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
-          : 'Le lien de réinitialisation est invalide ou a expiré. Demandez un nouveau lien.',
-        true
+      showPasswordResetUnavailable(
+        'Ce lien de création ou modification du mot de passe est invalide ou a déjà été utilisé. Demandez un nouveau lien.'
+      );
+      return;
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      showPasswordResetUnavailable(
+        'Ce lien de création ou modification du mot de passe est invalide ou a déjà été utilisé. Demandez un nouveau lien.'
       );
       return;
     }
@@ -543,11 +558,25 @@ if (passwordResetForm) {
       return;
     }
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      showPasswordResetUnavailable(
+        'Ce lien de création ou modification du mot de passe est invalide ou a déjà été utilisé. Demandez un nouveau lien.'
+      );
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
     if (error) {
+      if (error.message?.toLowerCase().includes('auth session missing')) {
+        showPasswordResetUnavailable(
+          'Ce lien de création ou modification du mot de passe est invalide ou a déjà été utilisé. Demandez un nouveau lien.'
+        );
+        return;
+      }
       showPasswordReset(error.message ?? 'Impossible de changer le mot de passe.', true);
       return;
     }
